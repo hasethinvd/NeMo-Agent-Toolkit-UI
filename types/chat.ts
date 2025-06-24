@@ -12,6 +12,7 @@ export type Role = 'assistant' | 'user' | 'agent' | 'system';
 export interface ChatBody {
   chatCompletionURL?: string,
   messages?: Message[],
+  jiraCredentials?: { username: string; token: string } | { encrypted: string },
   additionalProps?: any
 }
 

@@ -25,6 +25,8 @@ export interface HomeInitialState {
   expandIntermediateSteps?: boolean;
   intermediateStepOverride?: boolean;
   autoScroll?: boolean;
+  jiraToken?: string;
+  jiraUsername?: string;
   additionalConfig: any;
 }
 
@@ -51,5 +53,7 @@ export const initialState: HomeInitialState = {
   expandIntermediateSteps: false,
   intermediateStepOverride: true,
   autoScroll: true,
+  jiraToken: process?.env?.NEXT_PUBLIC_JIRA_TOKEN || '',
+  jiraUsername: process?.env?.NEXT_PUBLIC_JIRA_USERNAME || '',
   additionalConfig: {},
 };

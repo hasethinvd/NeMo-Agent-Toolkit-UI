@@ -58,7 +58,7 @@ export const ChatHeader = ({ webSocketModeRef = {} }) => {
                 :
                 <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 mx-auto flex flex-col space-y-5 md:space-y-10 px-3 pt-5 md:pt-12 sm:max-w-[600px] text-center">
                   <div className="text-3xl font-semibold text-gray-800 dark:text-white">
-                    Hi, I'm {workflow}
+                    Hi, I'm AIQ TPM assistant
                   </div>
                   <div className="text-lg text-gray-600 dark:text-gray-400">
                     How can I assist you today?

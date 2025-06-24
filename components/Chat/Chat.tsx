@@ -21,6 +21,8 @@ import {
   processIntermediateMessage,
 } from '@/utils/app/helper';
 import { throttle } from '@/utils/data/throttle';
+import { getJiraCredentials } from '@/utils/app/settings';
+import { encryptCredentials } from '@/utils/app/crypto';
 import { ChatBody, Conversation, Message } from '@/types/chat';
 import HomeContext from '@/pages/api/home/home.context';
 import { ChatInput } from './ChatInput';
@@ -496,9 +498,23 @@ export const Chat = () => {
           };
         })
 
+        // Get JIRA credentials from sessionStorage and encrypt them
+        const jiraCredentials = getJiraCredentials();
+        let encryptedJiraCredentials;
+        if (jiraCredentials.username && jiraCredentials.token) {
+          try {
+            encryptedJiraCredentials = await encryptCredentials(jiraCredentials);
+          } catch (error) {
+            console.error('Failed to encrypt JIRA credentials:', error);
+            // Fallback to original credentials if encryption fails
+            encryptedJiraCredentials = undefined;
+          }
+        }
+        
         const chatBody: ChatBody = {
           messages: chatHistory ? messagesCleaned : [{ role: 'user', content: message?.content }],
           chatCompletionURL: sessionStorage.getItem('chatCompletionURL') || chatCompletionURL,
+          jiraCredentials: encryptedJiraCredentials ? { encrypted: encryptedJiraCredentials } : undefined,
           additionalProps: {
             enableIntermediateSteps: sessionStorage.getItem('enableIntermediateSteps') 
             ? sessionStorage.getItem('enableIntermediateSteps') === 'true' 
