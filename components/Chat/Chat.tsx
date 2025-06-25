@@ -21,8 +21,7 @@ import {
   processIntermediateMessage,
 } from '@/utils/app/helper';
 import { throttle } from '@/utils/data/throttle';
-import { getJiraCredentials } from '@/utils/app/settings';
-import { encryptCredentials } from '@/utils/app/crypto';
+import { getSecureJIRACredentials } from '@/utils/app/crypto';
 import { ChatBody, Conversation, Message } from '@/types/chat';
 import HomeContext from '@/pages/api/home/home.context';
 import { ChatInput } from './ChatInput';
@@ -70,10 +69,10 @@ export const Chat = () => {
 
   const [modalOpen, setModalOpen] = useState(false);
   const [interactionMessage, setInteractionMessage] = useState(null);
-  const webSocketRef = useRef(null);
+  const webSocketRef = useRef<WebSocket | null>(null);
   const webSocketConnectedRef = useRef(false);
   const webSocketModeRef = useRef(sessionStorage.getItem('webSocketMode') === 'false' ? false : webSocketMode);
-  let websocketLoadingToastId = null;
+  let websocketLoadingToastId: any = null;
   const lastScrollTop = useRef(0); // Store last known scroll position
 
   // Add these variables near the top of your component
@@ -145,8 +144,14 @@ export const Chat = () => {
       return false;
     }
 
+    const url = sessionStorage.getItem('webSocketURL') || webSocketURL;
+    if (!url) {
+      toast.error("Please set a valid WebSocket server in settings");
+      return false;
+    }
+
     return new Promise((resolve) => {
-      const ws = new WebSocket((sessionStorage.getItem('webSocketURL') || webSocketURL));
+      const ws = new WebSocket(url);
 
       websocketLoadingToastId = toast.loading(
         "WebSocket is not connected, trying to connect...",
@@ -169,7 +174,7 @@ export const Chat = () => {
         resolve(true); // Resolve true only when connected
       };
 
-      ws.onmessage = (event) => {
+      ws.onmessage = (event: MessageEvent) => {
         const message = JSON.parse(event.data);
         handleWebSocketMessage(message);
       };
@@ -216,7 +221,7 @@ export const Chat = () => {
   // Re-attach the WebSocket handler when intermediateStepOverride changes because we need updated value from settings
   useEffect(() => {
     if (webSocketRef.current) {
-      webSocketRef.current.onmessage = (event) => {
+      webSocketRef.current.onmessage = (event: MessageEvent) => {
         const message = JSON.parse(event.data);
         handleWebSocketMessage(message);
       };
@@ -261,9 +266,8 @@ export const Chat = () => {
 
     // updating conversation with new message 
     let updatedMessages    
-    let selectedConversation = window.sessionStorage.getItem('selectedConversation')
-    selectedConversation = JSON.parse(selectedConversation ?? '{}')
-    let conversations = JSON.parse(window.sessionStorage.getItem('conversationsHistory')?? '[]')
+    let selectedConversation: Conversation = JSON.parse(window.sessionStorage.getItem('selectedConversation') ?? '{}');
+    let conversations: Conversation[] = JSON.parse(window.sessionStorage.getItem('conversationsHistory')?? '[]')
   
     // logic
     // if this is the first message (of the assistant response to user message), then add the message to the conversation as 'assistant' message
@@ -276,7 +280,7 @@ export const Chat = () => {
       updatedMessages = selectedConversation?.messages?.map((msg, idx) => {
         if (msg.role === 'assistant' && idx === selectedConversation?.messages?.length - 1) {
           // do this only for response token
-          let updatedContent = msg.content || '';
+          let updatedContent = typeof msg.content === 'string' ? msg.content : '';
           if(message?.type === webSocketMessageTypes.systemResponseMessage) {
             updatedContent = updatedContent + (message?.content?.text || '');
           }
@@ -324,7 +328,7 @@ export const Chat = () => {
           intermediateSteps: (message?.type === webSocketMessageTypes.systemIntermediateMessage) ? [{...message, index: 0}] : [], 
           humanInteractionMessages: (message?.type === webSocketMessageTypes.systemInteractionMessage) ? [message] : [], 
           errorMessages: message?.type === 'error' ? [message] : [] 
-        },
+        } as Message,
       ];
     }
 
@@ -448,10 +452,10 @@ export const Chat = () => {
                 content : [
                   {
                     type: 'text',
-                    text: message?.content?.trim() || ''
+                    text: typeof message.content === 'string' ? message.content.trim() : ''
                   },
-                  ...(message?.content?.attachments?.length > 0
-                    ? message?.content?.attachments?.map(attachment => ({
+                  ...((typeof message.content === 'object' && message.content.attachments)
+                    ? message.content.attachments.map((attachment: any) => ({
                         type: 'image',
                         image_url: attachment?.content
                       }))
@@ -468,7 +472,7 @@ export const Chat = () => {
                 content: [
                   {
                     type: 'text', 
-                    text: message?.content?.trim() || ''
+                    text: typeof message.content === 'string' ? message.content.trim() : ''
                   }
                 ],
               };
@@ -490,31 +494,33 @@ export const Chat = () => {
           return
         }
 
-        // cleaning up messages to fit the request payload
-        const messagesCleaned = updatedConversation.messages.map((message) => {
-          return {
-            role: message.role,
-            content: message.content.trim(),
-          };
-        })
+        const secureJiraCredentials = await getSecureJIRACredentials();
+        let jiraCredentialsForBody: ChatBody['jiraCredentials'];
 
-        // Get JIRA credentials from sessionStorage and encrypt them
-        const jiraCredentials = getJiraCredentials();
-        let encryptedJiraCredentials;
-        if (jiraCredentials.username && jiraCredentials.token) {
-          try {
-            encryptedJiraCredentials = await encryptCredentials(jiraCredentials);
-          } catch (error) {
-            console.error('Failed to encrypt JIRA credentials:', error);
-            // Fallback to original credentials if encryption fails
-            encryptedJiraCredentials = undefined;
+        if (secureJiraCredentials) {
+          if (secureJiraCredentials.encrypted) {
+            jiraCredentialsForBody = { encrypted: secureJiraCredentials.encrypted };
+          } else {
+            jiraCredentialsForBody = {
+              username: secureJiraCredentials.username,
+              token: secureJiraCredentials.token,
+            };
           }
         }
+
+        // cleaning up messages to fit the request payload
+        const messagesCleaned = updatedConversation.messages.map((message) => {
+          const content = typeof message.content === 'string' ? message.content.trim() : '';
+          return {
+            role: message.role,
+            content: content,
+          };
+        })
         
         const chatBody: ChatBody = {
           messages: chatHistory ? messagesCleaned : [{ role: 'user', content: message?.content }],
           chatCompletionURL: sessionStorage.getItem('chatCompletionURL') || chatCompletionURL,
-          jiraCredentials: encryptedJiraCredentials ? { encrypted: encryptedJiraCredentials } : undefined,
+          jiraCredentials: jiraCredentialsForBody,
           additionalProps: {
             enableIntermediateSteps: sessionStorage.getItem('enableIntermediateSteps') 
             ? sessionStorage.getItem('enableIntermediateSteps') === 'true' 
@@ -557,7 +563,7 @@ export const Chat = () => {
             if (updatedConversation.messages.length === 1) {
               const { content } = message;
               const customName =
-                content.length > 30
+                typeof content === 'string' && content.length > 30
                   ? content.substring(0, 30) + '...'
                   : content;
               updatedConversation = {

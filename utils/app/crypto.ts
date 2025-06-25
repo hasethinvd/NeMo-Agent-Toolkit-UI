@@ -1,103 +1,154 @@
-// Simple encryption utility for JIRA credentials
-// Uses Web Crypto API for client-side encryption
+import { JIRACredentials } from '@/types/jira';
 
-const ENCRYPTION_KEY_NAME = 'jira-creds-key';
+const S_KEY = 'chat-session-key'; // Key for session password
+const C_KEY = 'jira-credentials'; // Key for credentials in sessionStorage
 
-// Generate or retrieve encryption key
-async function getEncryptionKey(): Promise<CryptoKey> {
-  // In a real app, you'd want to derive this from user session or store it securely
-  // For now, we'll generate a key per session
-  const keyData = sessionStorage.getItem(ENCRYPTION_KEY_NAME);
-  
-  if (keyData) {
-    // Import existing key
-    const keyBuffer = new Uint8Array(JSON.parse(keyData));
-    return await crypto.subtle.importKey(
-      'raw',
-      keyBuffer,
-      { name: 'AES-GCM' },
-      false,
-      ['encrypt', 'decrypt']
-    );
-  } else {
-    // Generate new key
-    const key = await crypto.subtle.generateKey(
-      { name: 'AES-GCM', length: 256 },
-      true,
-      ['encrypt', 'decrypt']
-    );
-    
-    // Export and store key
-    const keyBuffer = await crypto.subtle.exportKey('raw', key);
-    sessionStorage.setItem(ENCRYPTION_KEY_NAME, JSON.stringify(Array.from(new Uint8Array(keyBuffer))));
-    
-    return key;
-  }
+// Interfaces for our stored data
+interface StoredEncryptedData {
+  iv: string;
+  salt: string;
+  data: string;
+  timestamp: string;
+  fingerprint: string;
 }
 
-export async function encryptCredentials(credentials: { username: string; token: string }): Promise<string> {
-  if (!credentials.username || !credentials.token) {
-    throw new Error('Username and token are required for encryption');
+// Generate a random password for the session if it doesn't exist
+const getSessionPassword = (): string => {
+  let pass = sessionStorage.getItem(S_KEY);
+  if (!pass) {
+    pass = window.crypto.getRandomValues(new Uint8Array(32)).toString();
+    sessionStorage.setItem(S_KEY, pass);
   }
+  return pass;
+};
 
+// Derive a key from the session password and a salt
+const getKey = async (salt: Uint8Array, secret: string): Promise<CryptoKey> => {
+  const enc = new TextEncoder();
+  const keyMaterial = await window.crypto.subtle.importKey(
+    'raw',
+    enc.encode(secret),
+    { name: 'PBKDF2' },
+    false,
+    ['deriveKey'],
+  );
+  return window.crypto.subtle.deriveKey(
+    {
+      name: 'PBKDF2',
+      salt: salt,
+      iterations: 100000,
+      hash: 'SHA-256',
+    },
+    keyMaterial,
+    { name: 'AES-GCM', length: 256 },
+    true,
+    ['encrypt', 'decrypt'],
+  );
+};
+
+// Create a SHA-256 fingerprint of the token
+const createFingerprint = async (token: string): Promise<string> => {
+    const enc = new TextEncoder();
+    const data = enc.encode(token);
+    const hashBuffer = await window.crypto.subtle.digest('SHA-256', data);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+};
+
+// Encrypt and store JIRA credentials
+export const setSecureJIRACredentials = async (credentials: JIRACredentials) => {
   try {
-    const key = await getEncryptionKey();
-    const encoder = new TextEncoder();
-    const data = encoder.encode(JSON.stringify(credentials));
-    
-    // Generate random IV
-    const iv = crypto.getRandomValues(new Uint8Array(12));
-    
-    // Encrypt
-    const encrypted = await crypto.subtle.encrypt(
+    const salt = window.crypto.getRandomValues(new Uint8Array(16));
+    const iv = window.crypto.getRandomValues(new Uint8Array(12));
+    const secret = getSessionPassword();
+    const key = await getKey(salt, secret);
+    const enc = new TextEncoder();
+
+    const encryptedData = await window.crypto.subtle.encrypt(
       { name: 'AES-GCM', iv: iv },
       key,
-      data
+      enc.encode(JSON.stringify(credentials)),
     );
-    
-    // Combine IV and encrypted data
-    const combined = new Uint8Array(iv.length + encrypted.byteLength);
-    combined.set(iv);
-    combined.set(new Uint8Array(encrypted), iv.length);
-    
-    // Return as base64
-    return btoa(String.fromCharCode.apply(null, Array.from(combined)));
-  } catch (error) {
-    console.error('Encryption error:', error);
-    throw new Error('Failed to encrypt credentials');
-  }
-}
 
-export async function decryptCredentials(encryptedData: string): Promise<{ username: string; token: string }> {
+    const fingerprint = await createFingerprint(credentials.token);
+
+    const storedData: StoredEncryptedData = {
+      iv: Buffer.from(iv).toString('base64'),
+      salt: Buffer.from(salt).toString('base64'),
+      data: Buffer.from(encryptedData).toString('base64'),
+      timestamp: new Date().toISOString(),
+      fingerprint: fingerprint,
+    };
+
+    sessionStorage.setItem(C_KEY, JSON.stringify(storedData));
+    console.log('JIRA credentials securely stored.');
+  } catch (error) {
+    console.error('Error setting secure JIRA credentials:', error);
+  }
+};
+
+// Retrieve and decrypt JIRA credentials
+export const getSecureJIRACredentials = async (): Promise<JIRACredentials | null> => {
   try {
-    const key = await getEncryptionKey();
-    
-    // Decode from base64
-    const combined = new Uint8Array(atob(encryptedData).split('').map(c => c.charCodeAt(0)));
-    
-    // Split IV and encrypted data
-    const iv = combined.slice(0, 12);
-    const encrypted = combined.slice(12);
-    
-    // Decrypt
-    const decrypted = await crypto.subtle.decrypt(
-      { name: 'AES-GCM', iv: iv },
-      key,
-      encrypted
-    );
-    
-    // Decode
-    const decoder = new TextDecoder();
-    const decryptedString = decoder.decode(decrypted);
-    
-    return JSON.parse(decryptedString);
-  } catch (error) {
-    console.error('Decryption error:', error);
-    throw new Error('Failed to decrypt credentials');
-  }
-}
+    const storedDataJSON = sessionStorage.getItem(C_KEY);
+    if (!storedDataJSON) return null;
 
-// Clear encryption key (call on logout)
-export function clearEncryptionKey(): void {
-  sessionStorage.removeItem(ENCRYPTION_KEY_NAME);
+    const storedData: StoredEncryptedData = JSON.parse(storedDataJSON);
+    const { iv, salt, data, timestamp } = storedData;
+
+    // Check for expiration (24 hours)
+    const storedTime = new Date(timestamp).getTime();
+    const now = new Date().getTime();
+    if (now - storedTime > 24 * 60 * 60 * 1000) {
+      console.log('JIRA credentials expired.');
+      clearJIRACredentials();
+      return null;
+    }
+
+    const secret = getSessionPassword();
+    const key = await getKey(
+      new Uint8Array(Buffer.from(salt, 'base64')),
+      secret,
+    );
+    const decryptedData = await window.crypto.subtle.decrypt(
+      { name: 'AES-GCM', iv: new Uint8Array(Buffer.from(iv, 'base64')) },
+      key,
+      new Uint8Array(Buffer.from(data, 'base64')),
+    );
+
+    const dec = new TextDecoder();
+    const credentials = JSON.parse(dec.decode(decryptedData));
+    console.log('JIRA credentials securely retrieved.');
+    return credentials;
+  } catch (error) {
+    console.error('Error getting secure JIRA credentials:', error);
+    // Clear potentially corrupted data
+    clearJIRACredentials();
+    return null;
+  }
+};
+
+// Clear credentials from storage
+export const clearJIRACredentials = () => {
+  sessionStorage.removeItem(C_KEY);
+  console.log('JIRA credentials cleared.');
+};
+
+// Get stored data for UI display (expiration and fingerprint)
+export const getJIRACredentialStatus = (): { expires?: Date, fingerprint?: string } | null => {
+    const storedDataJSON = sessionStorage.getItem(C_KEY);
+    if (!storedDataJSON) return null;
+
+    const storedData: StoredEncryptedData = JSON.parse(storedDataJSON);
+    const { timestamp, fingerprint } = storedData;
+
+    const storedTime = new Date(timestamp);
+    const expirationTime = new Date(storedTime.getTime() + 24 * 60 * 60 * 1000);
+
+    if (new Date() > expirationTime) {
+        clearJIRACredentials();
+        return null;
+    }
+
+    return { expires: expirationTime, fingerprint };
 } 

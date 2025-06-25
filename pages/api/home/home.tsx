@@ -42,7 +42,7 @@ const Home = (props: any) => {
     initialState,
   });
 
-  let workflow =  'AIQ Toolkit';
+  let workflow =  'AIQ TPM';
 
   const {
     state: {

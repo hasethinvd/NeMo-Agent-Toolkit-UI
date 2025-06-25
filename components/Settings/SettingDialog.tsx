@@ -3,6 +3,8 @@ import { useTranslation } from 'next-i18next';
 import HomeContext from '@/pages/api/home/home.context';
 import toast from 'react-hot-toast';
 import { JiraStatus } from './JiraStatus';
+import { clearJIRACredentials, getJIRACredentialStatus, setSecureJIRACredentials } from '../../utils/app/crypto';
+import { JiraCredentialsStatus } from './JiraCredentialsStatus';
 
 interface Props {
   open: boolean;
@@ -13,7 +15,7 @@ export const SettingDialog: FC<Props> = ({ open, onClose }) => {
   const { t } = useTranslation('settings');
   const modalRef = useRef<HTMLDivElement>(null);
   const {
-    state: { lightMode, chatCompletionURL, webSocketURL, webSocketSchema: schema, expandIntermediateSteps, intermediateStepOverride, enableIntermediateSteps, webSocketSchemas, jiraToken, jiraUsername },
+    state: { lightMode, chatCompletionURL, webSocketURL, webSocketSchema: schema, expandIntermediateSteps, intermediateStepOverride, enableIntermediateSteps, webSocketSchemas },
     dispatch: homeDispatch,
   } = useContext(HomeContext);
 
@@ -24,8 +26,18 @@ export const SettingDialog: FC<Props> = ({ open, onClose }) => {
   const [isIntermediateStepsEnabled, setIsIntermediateStepsEnabled] = useState(sessionStorage.getItem('enableIntermediateSteps') ? sessionStorage.getItem('enableIntermediateSteps') === 'true' : enableIntermediateSteps);
   const [detailsToggle, setDetailsToggle] = useState( sessionStorage.getItem('expandIntermediateSteps') === 'true' ? true : expandIntermediateSteps);
   const [intermediateStepOverrideToggle, setIntermediateStepOverrideToggle] = useState( sessionStorage.getItem('intermediateStepOverride') === 'false' ? false : intermediateStepOverride);
-  const [jiraTokenValue, setJiraTokenValue] = useState(sessionStorage.getItem('jiraToken') || jiraToken || '');
-  const [jiraUsernameValue, setJiraUsernameValue] = useState(sessionStorage.getItem('jiraUsername') || jiraUsername || '');
+  
+  const [jiraUsernameValue, setJiraUsernameValue] = useState('');
+  const [jiraTokenValue, setJiraTokenValue] = useState('');
+  const [jiraStatus, setJiraStatus] = useState<{ expires?: Date; fingerprint?: string } | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+
+  useEffect(() => {
+    const status = getJIRACredentialStatus();
+    setJiraStatus(status);
+    // We don't load the username or token to display them, for security.
+    // The user will have to re-enter them if they want to change them.
+  }, [open]);
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -41,7 +53,7 @@ export const SettingDialog: FC<Props> = ({ open, onClose }) => {
     };
   }, [open, onClose]);
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if(!chatCompletionEndPoint || !webSocketEndPoint) {
       toast.error('Please fill all the fields to save settings');
       return;
@@ -54,23 +66,51 @@ export const SettingDialog: FC<Props> = ({ open, onClose }) => {
     homeDispatch({ field: 'expandIntermediateSteps', value: detailsToggle });
     homeDispatch({ field: 'intermediateStepOverride', value: intermediateStepOverrideToggle });
     homeDispatch({ field: 'enableIntermediateSteps', value: isIntermediateStepsEnabled });
-    homeDispatch({ field: 'jiraToken', value: jiraTokenValue });
-    homeDispatch({ field: 'jiraUsername', value: jiraUsernameValue });
-
+    
     sessionStorage.setItem('chatCompletionURL', chatCompletionEndPoint);
     sessionStorage.setItem('webSocketURL', webSocketEndPoint);
     sessionStorage.setItem('webSocketSchema', webSocketSchema);
     sessionStorage.setItem('expandIntermediateSteps', String(detailsToggle));
     sessionStorage.setItem('intermediateStepOverride', String(intermediateStepOverrideToggle));
     sessionStorage.setItem('enableIntermediateSteps', String(isIntermediateStepsEnabled));
-    sessionStorage.setItem('jiraToken', jiraTokenValue);
-    sessionStorage.setItem('jiraUsername', jiraUsernameValue);
     
-    // Trigger storage event to update JIRA status
+    if (jiraUsernameValue && jiraTokenValue) {
+      setIsSaving(true);
+      const response = await fetch('/api/validate-jira', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ username: jiraUsernameValue, token: jiraTokenValue }),
+      });
+
+      if (response.ok) {
+        await setSecureJIRACredentials({ username: jiraUsernameValue, token: jiraTokenValue });
+        toast.success('JIRA credentials saved securely.');
+      } else {
+        const errorData = await response.json();
+        toast.error(`JIRA validation failed: ${errorData.error || 'Unknown error'}`);
+        setIsSaving(false);
+        return; // Stop execution if validation fails
+      }
+      setIsSaving(false);
+    }
+
     window.dispatchEvent(new Event('storage'));
     window.dispatchEvent(new Event('jira-credentials-changed'));
 
     toast.success('Settings saved successfully');
+    onClose();
+  };
+
+  const handleClearJira = () => {
+    setJiraUsernameValue('');
+    setJiraTokenValue('');
+    clearJIRACredentials();
+    setJiraStatus(null);
+    window.dispatchEvent(new Event('storage'));
+    window.dispatchEvent(new Event('jira-credentials-changed'));
+    toast.success('JIRA credentials cleared.');
     onClose();
   };
 
@@ -184,17 +224,12 @@ export const SettingDialog: FC<Props> = ({ open, onClose }) => {
         <div className="mt-4">
           <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">JIRA Configuration</h3>
           <JiraStatus className="mb-3" />
-          {(jiraUsernameValue || jiraTokenValue) && (
-            <div className="flex items-center gap-2 mb-3 p-2 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
-              <div className="w-3 h-3 rounded-full bg-blue-500 flex items-center justify-center">
-                <svg className="w-2 h-2 text-white" fill="currentColor" viewBox="0 0 20 20">
-                                      <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
-                </svg>
-              </div>
-              <span className="text-sm text-blue-700 dark:text-blue-300">
-                🔒 Credentials are encrypted during transmission
-              </span>
-            </div>
+          {jiraStatus && (
+            <JiraCredentialsStatus
+              fingerprint={jiraStatus.fingerprint}
+              expires={jiraStatus.expires}
+              className="mb-3"
+            />
           )}
         </div>
 
@@ -215,39 +250,34 @@ export const SettingDialog: FC<Props> = ({ open, onClose }) => {
           placeholder="Enter your JIRA API token"
           className="w-full mt-1 p-2 rounded-lg bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none"
         />
-        <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-          Generate your API token from JIRA → Account Settings → Security → API Tokens
-        </p>
 
-        {(jiraUsernameValue || jiraTokenValue) && (
-          <button
-            type="button"
-            onClick={() => {
-              setJiraUsernameValue('');
-              setJiraTokenValue('');
-              sessionStorage.removeItem('jiraUsername');
-              sessionStorage.removeItem('jiraToken');
-              window.dispatchEvent(new Event('storage'));
-              window.dispatchEvent(new Event('jira-credentials-changed'));
-            }}
-            className="mt-3 px-3 py-1 text-xs bg-red-100 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded hover:bg-red-200 dark:hover:bg-red-900/40 transition-colors"
-          >
-            Clear JIRA Credentials
-          </button>
+        {jiraStatus && (
+          <div className="mt-4">
+            <button
+              type="button"
+              className="w-full px-4 py-2 rounded-lg text-white bg-red-600 hover:bg-red-700 transition-colors"
+              onClick={handleClearJira}
+            >
+              {t('Clear JIRA Credentials')}
+            </button>
+          </div>
         )}
 
-        <div className="mt-6 flex justify-end gap-2">
+        <div className="flex justify-end gap-2 mt-6">
           <button
-            className="px-4 py-2 bg-gray-300 dark:bg-gray-600 text-gray-900 dark:text-white rounded-md hover:bg-gray-400 dark:hover:bg-gray-500 focus:outline-none"
+            type="button"
+            className="px-4 py-2 rounded-lg text-gray-900 dark:text-white hover:bg-gray-200 dark:hover:bg-gray-700"
             onClick={onClose}
           >
             {t('Cancel')}
           </button>
           <button
-            className="px-4 py-2 bg-[#76b900] text-white rounded-md hover:bg-[#5a9100] focus:outline-none"
+            type="button"
+            className="px-4 py-2 rounded-lg text-white bg-[#76b900] hover:bg-opacity-80 transition-all shadow-sm hover:shadow-md transform hover:-translate-y-0.5 disabled:bg-gray-400"
             onClick={handleSave}
+            disabled={isSaving}
           >
-            {t('Save')}
+            {isSaving ? t('Saving...') : t('Save')}
           </button>
         </div>
       </div>
