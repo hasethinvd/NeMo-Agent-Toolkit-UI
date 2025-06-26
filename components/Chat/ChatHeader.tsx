@@ -12,6 +12,7 @@ import {
 } from '@tabler/icons-react';
 import HomeContext from '@/pages/api/home/home.context';
 import { getWorkflowName } from '@/utils/app/helper';
+import { JiraTokenCountdown } from '../Settings/JiraTokenCountdown';
 
 export const ChatHeader = ({ webSocketModeRef = {} }) => {
     const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -78,6 +79,11 @@ export const ChatHeader = ({ webSocketModeRef = {} }) => {
                 </button>
 
                 <div className={`flex sm: gap-1 md:gap-4 overflow-hidden transition-all duration-300 ${isExpanded ? 'w-auto opacity-100' : 'w-0 opacity-0'}`}>
+                    {/* JIRA Token Countdown */}
+                    <div className="flex items-center">
+                        <JiraTokenCountdown />
+                    </div>
+
                     {/* Chat History Toggle */}
                     <div className="flex items-center gap-2 whitespace-nowrap">
                         <label className="flex items-center gap-2 cursor-pointer flex-shrink-0">
