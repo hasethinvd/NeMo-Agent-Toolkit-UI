@@ -95,6 +95,12 @@ export const SettingDialog: FC<Props> = ({ open, onClose }) => {
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
+      // Don't close settings dialog when MFA modals are open
+      if (showMfaSetup || showMfaVerify) {
+        console.log('Ignoring click outside because MFA modal is open');
+        return;
+      }
+      
       if (modalRef.current && !modalRef.current.contains(e.target as Node)) {
         onClose();
       }
@@ -108,6 +114,14 @@ export const SettingDialog: FC<Props> = ({ open, onClose }) => {
   }, [open, onClose]);
 
   const handleSave = async () => {
+    console.log('🔧 handleSave called with:', {
+      chatCompletionEndPoint,
+      webSocketEndPoint,
+      jiraUsernameValue,
+      hasJiraToken: !!jiraTokenValue,
+      jiraTokenLength: jiraTokenValue?.length
+    });
+    
     if(!chatCompletionEndPoint || !webSocketEndPoint) {
       toast.error('Please fill all the fields to save settings');
       return;
@@ -115,10 +129,21 @@ export const SettingDialog: FC<Props> = ({ open, onClose }) => {
 
     // If trying to save JIRA credentials, handle MFA automatically
     if (jiraUsernameValue && jiraTokenValue) {
+      console.log('🔐 JIRA credentials detected, starting MFA flow for user:', jiraUsernameValue);
       try {
         // Check if MFA is already set up for this user
+        console.log('🔍 Checking MFA status for user:', jiraUsernameValue);
         const mfaResponse = await fetch(`/api/mfa/status?user_id=${jiraUsernameValue}`);
+        console.log('🔍 MFA status response:', mfaResponse.status, mfaResponse.ok);
+        
+        if (!mfaResponse.ok) {
+          console.error('❌ MFA status check failed:', mfaResponse.status);
+          toast.error('Failed to check MFA status. Please try again.');
+          return;
+        }
+        
         const mfaStatus = await mfaResponse.json();
+        console.log('🔍 MFA status data:', mfaStatus);
         
         if (!mfaStatus.enabled) {
           // MFA not set up - trigger automatic MFA setup
@@ -219,7 +244,7 @@ export const SettingDialog: FC<Props> = ({ open, onClose }) => {
           }
           
           // Validate the existing session
-          const sessionResponse = await fetch(`http://localhost:8000/mfa/session/validate?session_id=${storedSessionId}&user_id=${jiraUsernameValue}`);
+          const sessionResponse = await fetch(`/api/mfa/session/validate?session_id=${storedSessionId}&user_id=${jiraUsernameValue}`);
           if (!sessionResponse.ok) {
             // Session expired - fetch QR code and show MFA verification modal
             sessionStorage.removeItem('mfa_session_id');
@@ -328,27 +353,9 @@ export const SettingDialog: FC<Props> = ({ open, onClose }) => {
     sessionStorage.setItem('intermediateStepOverride', String(intermediateStepOverrideToggle));
     sessionStorage.setItem('enableIntermediateSteps', String(isIntermediateStepsEnabled));
     
-    if (jiraUsernameValue && jiraTokenValue) {
-      setIsSaving(true);
-      const response = await fetch('/api/validate-jira', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ username: jiraUsernameValue, token: jiraTokenValue }),
-      });
-
-      if (response.ok) {
-        await setSecureJIRACredentials({ username: jiraUsernameValue, token: jiraTokenValue });
-        toast.success('JIRA credentials saved securely with MFA protection.');
-      } else {
-        const errorData = await response.json();
-        toast.error(`JIRA validation failed: ${errorData.error || 'Unknown error'}`);
-        setIsSaving(false);
-        return; // Stop execution if validation fails
-      }
-      setIsSaving(false);
-    }
+    // JIRA credentials are now handled through MFA flow above
+    // This section should not run if JIRA credentials exist
+    console.log('🔧 Skipping direct JIRA save - handled by MFA flow');
 
     window.dispatchEvent(new Event('storage'));
     window.dispatchEvent(new Event('jira-credentials-changed'));
@@ -463,19 +470,31 @@ export const SettingDialog: FC<Props> = ({ open, onClose }) => {
         } else {
           const errorMsg = data.error || 'Invalid code';
           console.error('MFA Verification failed:', errorMsg);
-          toast.error(`❌ ${errorMsg}. Please try again.`);
+          toast.error(`❌ ${errorMsg}. Please try again from Settings.`);
           
-          // Don't clear the code on failure, let user try again
-          // setMfaCode('');
+          // Close MFA modals and return to settings window on failure
+          setShowMfaSetup(false);
+          setShowMfaVerify(false);
+          setMfaCode('');
         }
       } else {
         const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
         console.error('MFA Verification HTTP error:', response.status, errorData);
-        toast.error(`Failed to verify MFA code: ${errorData.error || 'Server error'}`);
+        toast.error(`Failed to verify MFA code: ${errorData.error || 'Server error'}. Please try again from Settings.`);
+        
+        // Close MFA modals and return to settings window on HTTP error
+        setShowMfaSetup(false);
+        setShowMfaVerify(false);
+        setMfaCode('');
       }
     } catch (error) {
       console.error('MFA verification error:', error);
-      toast.error('Connection error. Please try again.');
+      toast.error('Connection error. Please try again from Settings.');
+      
+      // Close MFA modals and return to settings window on connection error
+      setShowMfaSetup(false);
+      setShowMfaVerify(false);
+      setMfaCode('');
     }
   };
 

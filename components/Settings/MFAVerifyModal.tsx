@@ -77,19 +77,67 @@ export const MFAVerifyModal: FC<Props> = ({
   return (
     <div 
       className="fixed inset-0 bg-black bg-opacity-70 backdrop-blur-sm flex items-center justify-center p-4"
-      style={{ zIndex: 999999 }}
+      style={{ 
+        zIndex: 999999,
+        pointerEvents: 'auto',
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0
+      }}
+      onClick={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        // Completely prevent any click from closing the modal
+        console.log('MFA Verify Modal backdrop clicked - preventing closure');
+        return false;
+      }}
+      onMouseDown={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        return false;
+      }}
     >
       <div 
         className="bg-white dark:bg-gray-800 rounded-2xl max-w-lg w-full max-h-[95vh] overflow-y-auto shadow-2xl border border-gray-200 dark:border-gray-700"
-        onClick={(e) => e.stopPropagation()}
+        style={{ 
+          pointerEvents: 'auto',
+          position: 'relative',
+          zIndex: 1000000
+        }}
+        onClick={(e) => {
+          e.stopPropagation();
+          console.log('MFA Verify Modal content clicked');
+        }}
+        onMouseDown={(e) => {
+          e.stopPropagation();
+        }}
       >
         <div className="p-6">
           {/* Header */}
           <div className="flex items-center justify-between mb-6">
             <h3 className="text-xl font-bold text-gray-900 dark:text-white">🔐 Verify MFA</h3>
                          <button
-               onClick={onClose}
+               type="button"
+               onMouseDown={(e) => {
+                 e.preventDefault();
+                 e.stopPropagation();
+               }}
+               onClick={(e) => {
+                 e.preventDefault();
+                 e.stopPropagation();
+                 console.log('MFA Verify Modal close button clicked');
+                 setTimeout(() => {
+                   onClose();
+                 }, 10);
+               }}
                className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full transition-colors"
+               style={{ 
+                 pointerEvents: 'auto', 
+                 zIndex: 1000001,
+                 position: 'relative'
+               }}
              >
                <span className="text-xl">✕</span>
              </button>
@@ -148,31 +196,59 @@ export const MFAVerifyModal: FC<Props> = ({
                  type="text"
                  value={mfaCode}
                  onChange={(e) => setMfaCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                 onClick={(e) => {
+                   e.stopPropagation();
+                   console.log('MFA input clicked');
+                 }}
+                 onFocus={() => console.log('MFA input focused')}
                  placeholder="000000"
                  className="flex-1 px-4 py-3 text-center text-xl font-mono border-2 border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
                  maxLength={6}
+                 style={{ 
+                   pointerEvents: 'auto',
+                   zIndex: 1000001,
+                   position: 'relative'
+                 }}
                  autoFocus
                />
                              <button
                  type="button"
                  onMouseDown={(e) => {
                    e.preventDefault();
+                   e.stopPropagation();
+                   console.log('MFA Verify button mouse down');
+                 }}
+                 onClick={(e) => {
+                   e.preventDefault();
+                   e.stopPropagation();
+                   console.log('MFA Verify button clicked');
+                   
                    if (mfaCode.length === 6) {
                      console.log('MFAVerifyModal: Verify button clicked, code:', mfaCode);
-                     onVerify();
+                     setTimeout(() => {
+                       onVerify();
+                     }, 10);
                    }
                  }}
                  onKeyDown={(e) => {
                    if (e.key === 'Enter' || e.key === ' ') {
                      e.preventDefault();
+                     e.stopPropagation();
                      if (mfaCode.length === 6) {
                        console.log('MFAVerifyModal: Verify button pressed with keyboard, code:', mfaCode);
-                       onVerify();
+                       setTimeout(() => {
+                         onVerify();
+                       }, 10);
                      }
                    }
                  }}
                  disabled={mfaCode.length !== 6}
                  className="px-6 py-3 bg-gradient-to-r from-[#76B900] to-[#6AA600] hover:from-[#6AA600] hover:to-[#5E9400] text-white font-medium rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-all focus:outline-none focus:ring-2 focus:ring-blue-500"
+                 style={{ 
+                   pointerEvents: 'auto', 
+                   zIndex: 1000001,
+                   position: 'relative'
+                 }}
                >
                  Verify
                </button>

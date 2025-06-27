@@ -85,7 +85,7 @@ export const MFASettings: FC<Props> = ({ className = '' }) => {
         if (storedSessionId && storedSessionUser === userId) {
           try {
             // Validate the stored session
-            const sessionResponse = await fetch(`http://localhost:8000/mfa/session/validate?session_id=${storedSessionId}&user_id=${userId}`);
+            const sessionResponse = await fetch(`/api/mfa/session/validate?session_id=${storedSessionId}&user_id=${userId}`);
             if (sessionResponse.ok) {
               const sessionData = await sessionResponse.json();
               hasActiveSession = sessionData.valid;
