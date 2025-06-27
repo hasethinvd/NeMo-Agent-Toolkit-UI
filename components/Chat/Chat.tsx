@@ -494,17 +494,29 @@ export const Chat = () => {
           return
         }
 
-        const secureJiraCredentials = await getSecureJIRACredentials();
+        // Get encrypted credentials data directly from storage (don't decrypt on client)
+        const storedDataJSON = sessionStorage.getItem('jira-credentials');
         let jiraCredentialsForBody: ChatBody['jiraCredentials'];
 
-        if (secureJiraCredentials) {
-          if (secureJiraCredentials.encrypted) {
-            jiraCredentialsForBody = { encrypted: secureJiraCredentials.encrypted };
-          } else {
-            jiraCredentialsForBody = {
-              username: secureJiraCredentials.username,
-              token: secureJiraCredentials.token,
-            };
+        if (storedDataJSON) {
+          try {
+            const storedData = JSON.parse(storedDataJSON);
+            // Check if credentials are expired before sending
+            const storedTime = new Date(storedData.timestamp).getTime();
+            const now = new Date().getTime();
+            if (now - storedTime <= 24 * 60 * 60 * 1000) {
+              // Send encrypted data to server for decryption
+              jiraCredentialsForBody = { 
+                encrypted: JSON.stringify({
+                  iv: storedData.iv,
+                  salt: storedData.salt,
+                  data: storedData.data,
+                  sessionKey: sessionStorage.getItem('chat-session-key')
+                })
+              };
+            }
+          } catch (error) {
+            console.error('Error preparing encrypted JIRA credentials:', error);
           }
         }
 

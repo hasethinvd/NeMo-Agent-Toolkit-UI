@@ -134,6 +134,56 @@ export const clearJIRACredentials = () => {
   console.log('JIRA credentials cleared.');
 };
 
+// Server-side decryption function for encrypted credentials
+export const decryptCredentials = async (encryptedData: string): Promise<{ username: string; token: string } | null> => {
+  try {
+    const { iv, salt, data, sessionKey } = JSON.parse(encryptedData);
+    
+    if (!iv || !salt || !data || !sessionKey) {
+      throw new Error('Missing required decryption data');
+    }
+
+    // This function should match the client-side encryption in setSecureJIRACredentials
+    // Derive the key using the session key and salt (same as client-side)
+    const enc = new TextEncoder();
+    const keyMaterial = await globalThis.crypto.subtle.importKey(
+      'raw',
+      enc.encode(sessionKey),
+      { name: 'PBKDF2' },
+      false,
+      ['deriveKey'],
+    );
+
+    const key = await globalThis.crypto.subtle.deriveKey(
+      {
+        name: 'PBKDF2',
+        salt: new Uint8Array(Buffer.from(salt, 'base64')),
+        iterations: 100000,
+        hash: 'SHA-256',
+      },
+      keyMaterial,
+      { name: 'AES-GCM', length: 256 },
+      true,
+      ['decrypt'],
+    );
+
+    // Decrypt the data using AES-GCM (same as client-side)
+    const decryptedData = await globalThis.crypto.subtle.decrypt(
+      { name: 'AES-GCM', iv: new Uint8Array(Buffer.from(iv, 'base64')) },
+      key,
+      new Uint8Array(Buffer.from(data, 'base64')),
+    );
+
+    const dec = new TextDecoder();
+    const credentials = JSON.parse(dec.decode(decryptedData));
+    console.log('✅ JIRA credentials decrypted on server');
+    return credentials;
+  } catch (error) {
+    console.error('❌ Error decrypting JIRA credentials on server:', error);
+    return null;
+  }
+};
+
 // Get stored data for UI display (expiration and fingerprint)
 export const getJIRACredentialStatus = (): { expires?: Date, fingerprint?: string } | null => {
     const storedDataJSON = sessionStorage.getItem(C_KEY);

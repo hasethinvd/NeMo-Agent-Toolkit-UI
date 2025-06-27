@@ -32,12 +32,14 @@ const handler = async (req: Request): Promise<Response> => {
       if ('encrypted' in jiraCredentials) {
         try {
           decryptedJiraCredentials = await decryptCredentials(jiraCredentials.encrypted);
+          console.log('✅ JIRA credentials successfully decrypted on server');
         } catch (error) {
-          console.error('Failed to decrypt JIRA credentials:', error);
+          console.error('❌ Failed to decrypt JIRA credentials on server:', error);
           decryptedJiraCredentials = undefined;
         }
       } else {
-        // Legacy plain credentials
+        // Legacy plain credentials (fallback for compatibility)
+        console.log('⚠️ Using legacy plain text JIRA credentials');
         decryptedJiraCredentials = jiraCredentials;
       }
     }
