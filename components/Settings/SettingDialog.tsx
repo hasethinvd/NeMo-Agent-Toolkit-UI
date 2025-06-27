@@ -833,7 +833,7 @@ export const SettingDialog: FC<Props> = ({ open, onClose }) => {
                   {mfaSetupData.is_existing && (
                     <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg p-3 mb-4">
                       <p className="text-blue-700 dark:text-blue-300 text-sm">
-                        💡 <strong>Account already exists in Microsoft Authenticator:</strong> <code className="bg-blue-100 dark:bg-blue-800 px-1 rounded">{mfaSetupData.email}</code>
+                        💡 <strong>Account already exists in your authenticator app:</strong> <code className="bg-blue-100 dark:bg-blue-800 px-1 rounded">{mfaSetupData.email}</code>
                         <br />You can use your existing entry or scan this QR code again if needed.
                       </p>
                     </div>
@@ -861,7 +861,7 @@ export const SettingDialog: FC<Props> = ({ open, onClose }) => {
                 <div className="space-y-4">
                   <h4 className="text-lg font-semibold text-gray-900 dark:text-white">Enter Verification Code</h4>
                   <p className="text-gray-600 dark:text-gray-400">
-                    Enter the 6-digit code from Microsoft Authenticator to complete setup:
+                    Enter the 6-digit code from your authenticator app to complete setup:
                   </p>
                   
                   <div className="flex gap-3">
@@ -920,18 +920,7 @@ export const SettingDialog: FC<Props> = ({ open, onClose }) => {
                 <div className="text-xs text-gray-500 dark:text-gray-400">
                   This creates a 24-hour session for JIRA operations.
                 </div>
-                <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-700 rounded-lg p-3">
-                  <div className="text-xs text-yellow-800 dark:text-yellow-300 space-y-1">
-                    <div className="font-semibold">📱 Microsoft Authenticator Setup:</div>
-                    <div>• Open Microsoft Authenticator app</div>
-                    <div>• Tap the "+" button to add an account</div>
-                    <div>• Choose "Work or school account" or "Other account"</div>
-                    <div>• Scan the QR code above</div>
-                    <div>• The account will be saved as: <code className="bg-yellow-100 dark:bg-yellow-800 px-1 rounded">{mfaSetupData.email}</code></div>
-                    <div>• Username is just for identification - authentication uses the secret in QR code</div>
-                    <div>• Codes refresh every 30 seconds</div>
-                  </div>
-                </div>
+
               </div>
                 </div>
               </div>

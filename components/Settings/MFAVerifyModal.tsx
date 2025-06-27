@@ -151,7 +151,7 @@ export const MFAVerifyModal: FC<Props> = ({
             
             <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg p-3 mb-4">
               <p className="text-blue-700 dark:text-blue-300 text-sm">
-                📱 <strong>For Microsoft Authenticator:</strong> Use your existing entry for <code className="bg-blue-100 dark:bg-blue-800 px-1 rounded">{userEmail}</code>
+                📱 <strong>Authenticator App:</strong> Use your existing entry for <code className="bg-blue-100 dark:bg-blue-800 px-1 rounded">{userEmail}</code>
                 <br />If you need to re-scan, use the QR code below.
               </p>
             </div>
@@ -188,7 +188,7 @@ export const MFAVerifyModal: FC<Props> = ({
           <div className="mb-6">
             <h4 className="text-lg font-semibold text-gray-900 dark:text-white mb-3">Enter Verification Code</h4>
             <p className="text-gray-600 dark:text-gray-400 mb-4">
-              Enter the 6-digit code from Microsoft Authenticator:
+              Enter the 6-digit code from your authenticator app:
             </p>
             
             <div className="flex gap-3 mb-4">
@@ -259,17 +259,7 @@ export const MFAVerifyModal: FC<Props> = ({
             </div>
           </div>
 
-          {/* Microsoft Authenticator Specific Help */}
-          <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-700 rounded-lg p-3">
-            <div className="text-xs text-yellow-800 dark:text-yellow-300 space-y-1">
-              <div className="font-semibold">📱 Microsoft Authenticator Tips:</div>
-              <div>• Open Microsoft Authenticator app</div>
-              <div>• Find the entry for: <code className="bg-yellow-100 dark:bg-yellow-800 px-1 rounded">{userEmail}</code></div>
-              <div>• Use the current 6-digit code (refreshes every 30 seconds)</div>
-              <div>• If you don't see the entry, scan the QR code above to add it</div>
-              <div>• Make sure your device time is synchronized</div>
-            </div>
-          </div>
+
         </div>
       </div>
     </div>
