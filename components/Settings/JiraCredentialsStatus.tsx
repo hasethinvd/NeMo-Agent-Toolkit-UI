@@ -103,20 +103,22 @@ export const JiraCredentialsStatus: FC<Props> = ({ fingerprint, expires, classNa
 
   return (
     <div
-      className={`flex items-center gap-4 p-3 bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-lg text-sm text-gray-700 dark:text-gray-300 ${className}`}
-      title="Your JIRA credentials are encrypted and stored securely on this device."
+      className={`flex flex-col gap-2 p-3 bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-lg text-sm text-gray-700 dark:text-gray-300 ${className}`}
+      title="Your JIRA credentials are encrypted with rotating keys and stored securely on this device."
     >
-      <div className="flex items-center gap-1">
-        <span className={`font-semibold ${getStatusIconColor()}`}>{getStatusIcon()}</span>
-        <span>Secured</span>
-      </div>
-      <div className="flex items-center gap-1" title={`Full Fingerprint: ${fingerprint}`}>
-        <span className="font-semibold">FP:</span>
-        <span className="font-mono">{fingerprint.substring(0, 8)}...</span>
-      </div>
-      <div className="flex items-center gap-1">
-        <span className="font-semibold">Expires:</span>
-        <span className={getExpirationColor()}>{timeRemaining}</span>
+      <div className="flex items-center gap-4">
+        <div className="flex items-center gap-1">
+          <span className={`font-semibold ${getStatusIconColor()}`}>{getStatusIcon()}</span>
+          <span>Secured</span>
+        </div>
+        <div className="flex items-center gap-1" title={`Full Fingerprint: ${fingerprint}`}>
+          <span className="font-semibold">FP:</span>
+          <span className="font-mono">{fingerprint.substring(0, 6)}...</span>
+        </div>
+        <div className="flex items-center gap-1">
+          <span className="font-semibold">Expires:</span>
+          <span className={getExpirationColor()}>{timeRemaining}</span>
+        </div>
       </div>
     </div>
   );

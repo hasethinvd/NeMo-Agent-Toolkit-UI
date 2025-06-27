@@ -85,9 +85,42 @@ export const Chat = () => {
     setModalOpen(true);
   };
 
-  const handleUserInteraction = ({interactionMessage = {}, userResponse = ''} : any) => {
+  const handleUserInteraction = async ({interactionMessage = {}, userResponse = ''} : any) => {
     // todo send user input to websocket server as user response to interaction message
     // console.log("User response:", userResponse);
+    
+    // Get encrypted credentials data for WebSocket interaction
+    const storedDataJSON = sessionStorage.getItem('jira-credentials');
+    let jiraCredentialsForWS: any = undefined;
+
+    if (storedDataJSON) {
+      try {
+        const storedData = JSON.parse(storedDataJSON);
+        // Check if credentials are expired before sending
+        const storedTime = new Date(storedData.timestamp).getTime();
+        const now = new Date().getTime();
+        if (now - storedTime <= 24 * 60 * 60 * 1000) {
+          // Get the correct session key for the current key version
+          const { getCurrentSessionKey } = await import('@/utils/app/crypto');
+          const sessionKey = getCurrentSessionKey();
+          
+          if (sessionKey) {
+            // Send encrypted data to server for decryption
+            jiraCredentialsForWS = { 
+              encrypted: JSON.stringify({
+                iv: storedData.iv,
+                salt: storedData.salt,
+                data: storedData.data,
+                sessionKey: sessionKey
+              })
+            };
+          }
+        }
+      } catch (error) {
+        console.error('Error preparing encrypted JIRA credentials for WebSocket interaction:', error);
+      }
+    }
+
     const wsMessage = {
       type: webSocketMessageTypes.userInteractionMessage,
       id: uuidv4(), //new id for every new message
@@ -106,6 +139,7 @@ export const Chat = () => {
           }
         ]
       },
+      jira_credentials: jiraCredentialsForWS,
       timestamp: new Date().toISOString(),
     };
     console.log('sending user response for interaction message via websocket', wsMessage)
@@ -479,6 +513,38 @@ export const Chat = () => {
             })
           }
           
+          // Get encrypted credentials data for WebSocket request
+          const storedDataJSON = sessionStorage.getItem('jira-credentials');
+          let jiraCredentialsForWS: any = undefined;
+
+          if (storedDataJSON) {
+            try {
+              const storedData = JSON.parse(storedDataJSON);
+              // Check if credentials are expired before sending
+              const storedTime = new Date(storedData.timestamp).getTime();
+              const now = new Date().getTime();
+              if (now - storedTime <= 24 * 60 * 60 * 1000) {
+                // Get the correct session key for the current key version
+                const { getCurrentSessionKey } = await import('@/utils/app/crypto');
+                const sessionKey = getCurrentSessionKey();
+                
+                if (sessionKey) {
+                  // Send encrypted data to server for decryption
+                  jiraCredentialsForWS = { 
+                    encrypted: JSON.stringify({
+                      iv: storedData.iv,
+                      salt: storedData.salt,
+                      data: storedData.data,
+                      sessionKey: sessionKey
+                    })
+                  };
+                }
+              }
+            } catch (error) {
+              console.error('Error preparing encrypted JIRA credentials for WebSocket:', error);
+            }
+          }
+
           const wsMessage = {
             type: webSocketMessageTypes.userMessage,
             schema_type: sessionStorage.getItem('webSocketSchema') || webSocketSchema,
@@ -487,6 +553,7 @@ export const Chat = () => {
             content: {
               messages: chatMessages
             },
+            jira_credentials: jiraCredentialsForWS,
             timestamp: new Date().toISOString(),
           };
           // console.log('Sent message via websocket', wsMessage)
@@ -505,15 +572,21 @@ export const Chat = () => {
             const storedTime = new Date(storedData.timestamp).getTime();
             const now = new Date().getTime();
             if (now - storedTime <= 24 * 60 * 60 * 1000) {
-              // Send encrypted data to server for decryption
-              jiraCredentialsForBody = { 
-                encrypted: JSON.stringify({
-                  iv: storedData.iv,
-                  salt: storedData.salt,
-                  data: storedData.data,
-                  sessionKey: sessionStorage.getItem('chat-session-key')
-                })
-              };
+              // Get the correct session key for the current key version
+              const { getCurrentSessionKey } = await import('@/utils/app/crypto');
+              const sessionKey = getCurrentSessionKey();
+              
+              if (sessionKey) {
+                // Send encrypted data to server for decryption
+                jiraCredentialsForBody = { 
+                  encrypted: JSON.stringify({
+                    iv: storedData.iv,
+                    salt: storedData.salt,
+                    data: storedData.data,
+                    sessionKey: sessionKey
+                  })
+                };
+              }
             }
           } catch (error) {
             console.error('Error preparing encrypted JIRA credentials:', error);

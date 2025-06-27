@@ -4,7 +4,7 @@ import HomeContext from '@/pages/api/home/home.context';
 import toast from 'react-hot-toast';
 import { JiraStatus } from './JiraStatus';
 import { clearJIRACredentials, getJIRACredentialStatus, setSecureJIRACredentials } from '../../utils/app/crypto';
-import { JiraCredentialsStatus } from './JiraCredentialsStatus';
+import SecurityDashboard from './SecurityDashboard';
 
 interface Props {
   open: boolean;
@@ -29,14 +29,27 @@ export const SettingDialog: FC<Props> = ({ open, onClose }) => {
   
   const [jiraUsernameValue, setJiraUsernameValue] = useState('');
   const [jiraTokenValue, setJiraTokenValue] = useState('');
-  const [jiraStatus, setJiraStatus] = useState<{ expires?: Date; fingerprint?: string } | null>(null);
+  const [hasCredentials, setHasCredentials] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
-    const status = getJIRACredentialStatus();
-    setJiraStatus(status);
-    // We don't load the username or token to display them, for security.
-    // The user will have to re-enter them if they want to change them.
+    const updateCredentialStatus = () => {
+      const status = getJIRACredentialStatus();
+      setHasCredentials(!!status?.fingerprint);
+    };
+
+    updateCredentialStatus();
+    
+    // Listen for credential changes
+    const handleCredentialChange = () => {
+      updateCredentialStatus();
+    };
+    
+    window.addEventListener('jira-credentials-changed', handleCredentialChange);
+    
+    return () => {
+      window.removeEventListener('jira-credentials-changed', handleCredentialChange);
+    };
   }, [open]);
 
   useEffect(() => {
@@ -107,7 +120,7 @@ export const SettingDialog: FC<Props> = ({ open, onClose }) => {
     setJiraUsernameValue('');
     setJiraTokenValue('');
     clearJIRACredentials();
-    setJiraStatus(null);
+    setHasCredentials(false);
     window.dispatchEvent(new Event('storage'));
     window.dispatchEvent(new Event('jira-credentials-changed'));
     toast.success('JIRA credentials cleared.');
@@ -224,13 +237,7 @@ export const SettingDialog: FC<Props> = ({ open, onClose }) => {
         <div className="mt-4">
           <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">JIRA Configuration</h3>
           <JiraStatus className="mb-3" />
-          {jiraStatus && (
-            <JiraCredentialsStatus
-              fingerprint={jiraStatus.fingerprint}
-              expires={jiraStatus.expires}
-              className="mb-3"
-            />
-          )}
+          <SecurityDashboard />
         </div>
 
         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mt-4">{t('JIRA Username')}</label>
@@ -251,7 +258,7 @@ export const SettingDialog: FC<Props> = ({ open, onClose }) => {
           className="w-full mt-1 p-2 rounded-lg bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none"
         />
 
-        {jiraStatus && (
+        {hasCredentials && (
           <div className="mt-4">
             <button
               type="button"
