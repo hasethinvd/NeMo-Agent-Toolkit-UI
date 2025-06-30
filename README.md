@@ -193,7 +193,9 @@ Configure JIRA integration directly through the Settings interface:
 4. **Connection Status**: Monitor the connection indicator ("JIRA Not Connected" → "JIRA Connected")
 5. **Save Settings**: Click "Save" to store credentials securely
 
-<img src="public/screenshots/ui_jira_integration_settings.png" alt="JIRA Integration Settings" width="400"/>
+<div align="center">
+<img src="../../screenshots/ui_jira_integration_settings.png" alt="JIRA Integration Settings" width="400"/>
+</div>
 
 #### MFA Setup
 When JIRA credentials are configured, MFA is automatically set up:
