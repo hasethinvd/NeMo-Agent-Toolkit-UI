@@ -35,6 +35,26 @@ import { HomeInitialState, initialState } from './home.state';
 import { v4 as uuidv4 } from 'uuid';
 import { getWorkflowName } from '@/utils/app/helper';
 
+// Helper function to safely access sessionStorage
+const safeSessionStorage = {
+  getItem: (key: string): string | null => {
+    if (typeof window !== 'undefined' && window.sessionStorage) {
+      return sessionStorage.getItem(key);
+    }
+    return null;
+  },
+  setItem: (key: string, value: string): void => {
+    if (typeof window !== 'undefined' && window.sessionStorage) {
+      sessionStorage.setItem(key, value);
+    }
+  },
+  removeItem: (key: string): void => {
+    if (typeof window !== 'undefined' && window.sessionStorage) {
+      sessionStorage.removeItem(key);
+    }
+  }
+};
+
 const Home = (props: any) => {
   const { t } = useTranslation('chat');
 
@@ -176,17 +196,17 @@ const Home = (props: any) => {
       });
     }
 
-    const showChatbar = sessionStorage.getItem('showChatbar');
+    const showChatbar = safeSessionStorage.getItem('showChatbar');
     if (showChatbar) {
       dispatch({ field: 'showChatbar', value: showChatbar === 'true' });
     }
 
-    const folders = sessionStorage.getItem('folders');
+    const folders = safeSessionStorage.getItem('folders');
     if (folders) {
       dispatch({ field: 'folders', value: JSON.parse(folders) });
     }
 
-    const conversationHistory = sessionStorage.getItem('conversationHistory');
+    const conversationHistory = safeSessionStorage.getItem('conversationHistory');
     if (conversationHistory) {
       const parsedConversationHistory: Conversation[] =
         JSON.parse(conversationHistory);
@@ -197,7 +217,7 @@ const Home = (props: any) => {
       dispatch({ field: 'conversations', value: cleanedConversationHistory });
     }
 
-    const selectedConversation = sessionStorage.getItem('selectedConversation');
+    const selectedConversation = safeSessionStorage.getItem('selectedConversation');
     if (selectedConversation) {
       const parsedSelectedConversation: Conversation =
         JSON.parse(selectedConversation);
@@ -244,26 +264,26 @@ const Home = (props: any) => {
         />
         <link rel="icon" href="/nvidia.jpg" />
       </Head>
-      {selectedConversation && (
-        <main
-          className={`flex h-screen w-screen flex-col text-sm text-white dark:text-white ${lightMode}`}
-        >
-          <div className="fixed top-0 w-full sm:hidden">
-            <Navbar
-              selectedConversation={selectedConversation}
-              onNewConversation={handleNewConversation}
-            />
-          </div>
+      <main
+        className={`flex h-screen w-screen flex-col text-sm text-white dark:text-white ${lightMode}`}
+      >
+                 <div className="fixed top-0 w-full sm:hidden">
+           {selectedConversation && (
+             <Navbar
+               selectedConversation={selectedConversation}
+               onNewConversation={handleNewConversation}
+             />
+           )}
+         </div>
 
-          <div className="flex h-full w-full sm:pt-0">
-            <Chatbar />
+        <div className="flex h-full w-full sm:pt-0">
+          <Chatbar />
 
-            <div className="flex flex-1">
-              <Chat />
-            </div>
+          <div className="flex flex-1">
+            <Chat />
           </div>
-        </main>
-      )}
+        </div>
+      </main>
     </HomeContext.Provider>
   );
 };

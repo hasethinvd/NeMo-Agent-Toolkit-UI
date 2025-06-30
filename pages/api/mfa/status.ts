@@ -1,4 +1,6 @@
 import { NextApiRequest, NextApiResponse } from 'next';
+import { httpsFetch } from '@/utils/app/https-fetch';
+import { getApiUrl } from '@/utils/app/api-config';
 
 interface MFAStatusResponse {
   enabled: boolean;
@@ -20,7 +22,7 @@ export default async function handler(
     const userId = req.query.user_id as string || 'aiq-tpm-system';
 
     // Call Python backend to get MFA status
-    const response = await fetch(`http://localhost:8000/mfa/status?user_id=${userId}`, {
+    const response = await httpsFetch(getApiUrl(`/api/mfa/status?user_id=${userId}`), {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',

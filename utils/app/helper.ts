@@ -67,7 +67,12 @@ export const compressImage = (base64: string, mimeType: string | undefined, shou
 }
 
 export const getURLQueryParam = ({ param = '' }) => {
-    // Get the URL query parameters safely
+    // Get the URL query parameters safely (only on client-side)
+    if (typeof window === 'undefined') {
+        // Return empty values during SSR
+        return param ? null : {};
+    }
+    
     const urlParams = new URLSearchParams(window?.location?.search);
 
     if (param) {
@@ -91,16 +96,25 @@ export const getWorkflowName = () => {
 }
 
 export const setSessionError = (message = 'unknown error') => {
-    sessionStorage.setItem('error', 'true');
-    sessionStorage.setItem('errorMessage', message);
+    if (typeof window !== 'undefined' && window.sessionStorage) {
+        sessionStorage.setItem('error', 'true');
+        sessionStorage.setItem('errorMessage', message);
+    }
 }
 
 export const removeSessionError = () => {
-    sessionStorage.removeItem('error');
-    sessionStorage.removeItem('errorMessage');
+    if (typeof window !== 'undefined' && window.sessionStorage) {
+        sessionStorage.removeItem('error');
+        sessionStorage.removeItem('errorMessage');
+    }
 }
 
 export const isInsideIframe = () => {
+    if (typeof window === 'undefined') {
+        // Return false during SSR
+        return false;
+    }
+    
     try {
         return window?.self !== window?.top;
     } catch (e) {

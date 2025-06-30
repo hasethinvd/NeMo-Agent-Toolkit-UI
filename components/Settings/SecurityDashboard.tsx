@@ -130,21 +130,21 @@ const SecurityDashboard: React.FC = () => {
 
   if (!isVisible) {
     return (
-      <div className="mb-3">
+      <div className="mb-0">
         <button
           onClick={() => setIsVisible(true)}
-          className="group flex items-center justify-between w-full px-4 py-3 bg-gradient-to-r from-blue-50 to-indigo-50 hover:from-blue-100 hover:to-indigo-100 dark:from-blue-900/20 dark:to-indigo-900/20 dark:hover:from-blue-900/30 dark:hover:to-indigo-900/30 border-2 border-blue-200 dark:border-blue-700 rounded-lg text-blue-700 dark:text-blue-300 transition-all duration-200 transform hover:scale-105 shadow-sm hover:shadow-md"
+          className="group flex items-center justify-between w-full px-3 py-2.5 bg-gradient-to-r from-blue-50 to-indigo-50 hover:from-blue-100 hover:to-indigo-100 dark:from-blue-900/20 dark:to-indigo-900/20 dark:hover:from-blue-900/30 dark:hover:to-indigo-900/30 border-2 border-blue-200 dark:border-blue-700 rounded-lg text-blue-700 dark:text-blue-300 transition-all duration-200 transform hover:scale-105 shadow-sm hover:shadow-md"
         >
-          <div className="flex items-center space-x-3">
-            <div className="p-1 bg-blue-100 dark:bg-blue-800/50 rounded-full group-hover:scale-110 transition-transform">
-              <span className="text-lg">🛡️</span>
+          <div className="flex items-center space-x-2.5">
+            <div className="p-1.5 bg-blue-100 dark:bg-blue-800/50 rounded-full group-hover:scale-110 transition-transform">
+              <span className="text-base">🛡️</span>
             </div>
             <div>
-              <span className="font-semibold">Security Dashboard</span>
-              <div className="text-xs opacity-75">Monitor security events</div>
+              <div className="font-semibold text-sm">Security Dashboard</div>
+              <div className="text-xs opacity-75 mt-0.5">Monitor security events</div>
             </div>
           </div>
-          <span className="text-lg group-hover:translate-x-1 transition-transform">→</span>
+          <span className="text-base group-hover:translate-x-1 transition-transform">→</span>
         </button>
       </div>
     );
@@ -176,8 +176,8 @@ const SecurityDashboard: React.FC = () => {
             <div className="space-y-4">
               {/* Security Metrics */}
               <div className="grid grid-cols-2 gap-3">
-                <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg border border-blue-200 dark:border-blue-700">
-                  <div className="flex items-center space-x-2 mb-2">
+                <div className="bg-blue-50 dark:bg-blue-900/20 p-3.5 rounded-lg border border-blue-200 dark:border-blue-700">
+                  <div className="flex items-center space-x-2 mb-2.5">
                     <span className="text-lg">⏱️</span>
                     <div className="text-sm font-semibold text-blue-600 dark:text-blue-400">Session Age</div>
                   </div>
@@ -186,8 +186,8 @@ const SecurityDashboard: React.FC = () => {
                   </div>
                 </div>
                 
-                <div className="bg-green-50 dark:bg-green-900/20 p-4 rounded-lg border border-green-200 dark:border-green-700">
-                  <div className="flex items-center space-x-2 mb-2">
+                <div className="bg-green-50 dark:bg-green-900/20 p-3.5 rounded-lg border border-green-200 dark:border-green-700">
+                  <div className="flex items-center space-x-2 mb-2.5">
                     <span className="text-lg">🔑</span>
                     <div className="text-sm font-semibold text-green-600 dark:text-green-400">Credential Access</div>
                   </div>
@@ -196,8 +196,8 @@ const SecurityDashboard: React.FC = () => {
                   </div>
                 </div>
                 
-                <div className="bg-yellow-50 dark:bg-yellow-900/20 p-4 rounded-lg border border-yellow-200 dark:border-yellow-700">
-                  <div className="flex items-center space-x-2 mb-2">
+                <div className="bg-yellow-50 dark:bg-yellow-900/20 p-3.5 rounded-lg border border-yellow-200 dark:border-yellow-700">
+                  <div className="flex items-center space-x-2 mb-2.5">
                     <span className="text-lg">📊</span>
                     <div className="text-sm font-semibold text-yellow-600 dark:text-yellow-400">Total Events</div>
                   </div>
@@ -206,8 +206,8 @@ const SecurityDashboard: React.FC = () => {
                   </div>
                 </div>
                 
-                <div className="bg-red-50 dark:bg-red-900/20 p-4 rounded-lg border border-red-200 dark:border-red-700">
-                  <div className="flex items-center space-x-2 mb-2">
+                <div className="bg-red-50 dark:bg-red-900/20 p-3.5 rounded-lg border border-red-200 dark:border-red-700">
+                  <div className="flex items-center space-x-2 mb-2.5">
                     <span className="text-lg">🚨</span>
                     <div className="text-sm font-semibold text-red-600 dark:text-red-400">Alerts</div>
                   </div>
@@ -220,14 +220,14 @@ const SecurityDashboard: React.FC = () => {
               {/* Credential Security */}
               {(fingerprint || keyVersion > 0) && (
                 <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4 border border-gray-200 dark:border-gray-700">
-                  <div className="flex items-center space-x-2 mb-4">
+                  <div className="flex items-center space-x-2 mb-3.5">
                     <span className="text-lg">🔐</span>
                     <h4 className="text-base font-bold text-gray-700 dark:text-gray-300">JIRA Security</h4>
                   </div>
                   
                   <div className="space-y-3">
                     {fingerprint && credentialExpiration && (
-                      <div className="flex items-center justify-between py-3 px-4 bg-white dark:bg-gray-700 rounded-lg border">
+                      <div className="flex items-center justify-between py-2.5 px-3.5 bg-white dark:bg-gray-700 rounded-lg border">
                         <div className="flex items-center space-x-3">
                           <span className="text-lg">✅</span>
                           <div>
@@ -245,7 +245,7 @@ const SecurityDashboard: React.FC = () => {
                     )}
 
                     {keyVersion > 0 && (
-                      <div className="flex items-center justify-between py-3 px-4 bg-white dark:bg-gray-700 rounded-lg border">
+                      <div className="flex items-center justify-between py-2.5 px-3.5 bg-white dark:bg-gray-700 rounded-lg border">
                         <div className="flex items-center space-x-3">
                           <span className="text-lg">🔄</span>
                           <div>
@@ -269,17 +269,17 @@ const SecurityDashboard: React.FC = () => {
 
               {/* Recent Events */}
               <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4 border border-gray-200 dark:border-gray-700">
-                <div className="flex items-center space-x-2 mb-4">
+                <div className="flex items-center space-x-2 mb-3.5">
                   <span className="text-lg">📋</span>
                   <h4 className="text-base font-bold text-gray-700 dark:text-gray-300">Recent Events</h4>
                 </div>
                 
-                <div className="max-h-48 overflow-y-auto space-y-3">
+                <div className="max-h-40 overflow-y-auto space-y-2.5">
                   {securityReport.recentEvents.length === 0 ? (
                     <div className="text-center py-6">
-                      <span className="text-4xl mb-2 block">🔒</span>
+                      <span className="text-3xl mb-2 block">🔒</span>
                       <div className="text-sm text-gray-500 dark:text-gray-400 font-medium">No recent events</div>
-                      <div className="text-xs text-gray-400 dark:text-gray-500">Your session is secure</div>
+                      <div className="text-xs text-gray-400 dark:text-gray-500 mt-1">Your session is secure</div>
                     </div>
                   ) : (
                     securityReport.recentEvents.slice(0, 5).map((event, index) => (
@@ -311,23 +311,23 @@ const SecurityDashboard: React.FC = () => {
 
               {/* Session Info */}
               <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4 border border-gray-200 dark:border-gray-700">
-                <div className="flex items-center space-x-2 mb-4">
+                <div className="flex items-center space-x-2 mb-3.5">
                   <span className="text-lg">🔍</span>
                   <h4 className="text-base font-bold text-gray-700 dark:text-gray-300">Session Info</h4>
                 </div>
                 
                 <div className="space-y-3 text-sm">
-                  <div className="flex justify-between items-center py-2 px-3 bg-white dark:bg-gray-700 rounded-lg">
+                  <div className="flex justify-between items-center py-2.5 px-3 bg-white dark:bg-gray-700 rounded-lg">
                     <span className="font-medium text-gray-600 dark:text-gray-400">ID:</span>
                     <span className="font-mono bg-gray-100 dark:bg-gray-600 px-2 py-1 rounded text-xs">
                       {securityReport.sessionInfo.id.substring(0, 8)}...
                     </span>
                   </div>
-                  <div className="flex justify-between items-center py-2 px-3 bg-white dark:bg-gray-700 rounded-lg">
+                  <div className="flex justify-between items-center py-2.5 px-3 bg-white dark:bg-gray-700 rounded-lg">
                     <span className="font-medium text-gray-600 dark:text-gray-400">Created:</span>
                     <span className="text-sm">{new Date(securityReport.sessionInfo.created).toLocaleTimeString()}</span>
                   </div>
-                  <div className="flex justify-between items-center py-2 px-3 bg-white dark:bg-gray-700 rounded-lg">
+                  <div className="flex justify-between items-center py-2.5 px-3 bg-white dark:bg-gray-700 rounded-lg">
                     <span className="font-medium text-gray-600 dark:text-gray-400">Last Activity:</span>
                     <span className="text-sm">{new Date(securityReport.sessionInfo.lastActivity).toLocaleTimeString()}</span>
                   </div>

@@ -1,4 +1,6 @@
 import { NextApiRequest, NextApiResponse } from 'next';
+import { httpsFetch } from '@/utils/app/https-fetch';
+import { getApiUrl } from '@/utils/app/api-config';
 
 interface MFASetupResponse {
   success: boolean;
@@ -66,7 +68,7 @@ async function handleMFASetup(
 ) {
   try {
     // Call Python backend to setup MFA
-    const response = await fetch('http://localhost:8000/mfa/setup', {
+    const response = await httpsFetch(getApiUrl('/api/mfa/setup'), {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -113,7 +115,7 @@ async function handleMFAVerify(
     }
 
     // Call Python backend to verify MFA
-    const response = await fetch('http://localhost:8000/mfa/verify', {
+    const response = await httpsFetch(getApiUrl('/api/mfa/verify'), {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -152,7 +154,7 @@ async function handleMFAStatus(
 ) {
   try {
     // Call Python backend to get MFA status
-    const response = await fetch(`http://localhost:8000/mfa/status?user_id=${userId}`, {
+    const response = await httpsFetch(getApiUrl(`/api/mfa/status?user_id=${userId}`), {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
@@ -183,7 +185,7 @@ async function handleMFADisable(
 ) {
   try {
     // Call Python backend to disable MFA
-    const response = await fetch('http://localhost:8000/mfa/disable', {
+    const response = await httpsFetch(getApiUrl('/api/mfa/disable'), {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

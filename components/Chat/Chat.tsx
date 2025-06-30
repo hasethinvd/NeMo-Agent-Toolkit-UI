@@ -33,6 +33,26 @@ import { InteractionModal } from '@/components/Chat/ChatInteractionMessage';
 import { webSocketMessageTypes } from '@/utils/app/const';
 import { ChatHeader } from './ChatHeader';
 
+// Helper function to safely access sessionStorage
+const safeSessionStorage = {
+  getItem: (key: string): string | null => {
+    if (typeof window !== 'undefined' && window.sessionStorage) {
+      return sessionStorage.getItem(key);
+    }
+    return null;
+  },
+  setItem: (key: string, value: string): void => {
+    if (typeof window !== 'undefined' && window.sessionStorage) {
+      sessionStorage.setItem(key, value);
+    }
+  },
+  removeItem: (key: string): void => {
+    if (typeof window !== 'undefined' && window.sessionStorage) {
+      sessionStorage.removeItem(key);
+    }
+  }
+};
+
 export const Chat = () => {
   const { t } = useTranslation('chat');
   const {
@@ -71,7 +91,7 @@ export const Chat = () => {
   const [interactionMessage, setInteractionMessage] = useState(null);
   const webSocketRef = useRef<WebSocket | null>(null);
   const webSocketConnectedRef = useRef(false);
-  const webSocketModeRef = useRef(sessionStorage.getItem('webSocketMode') === 'false' ? false : webSocketMode);
+  const webSocketModeRef = useRef(safeSessionStorage.getItem('webSocketMode') === 'false' ? false : webSocketMode);
   let websocketLoadingToastId: any = null;
   const lastScrollTop = useRef(0); // Store last known scroll position
 
@@ -90,7 +110,7 @@ export const Chat = () => {
     // console.log("User response:", userResponse);
     
     // Get encrypted credentials data for WebSocket interaction
-    const storedDataJSON = sessionStorage.getItem('jira-credentials');
+    const storedDataJSON = safeSessionStorage.getItem('jira-credentials');
     let jiraCredentialsForWS: any = undefined;
 
     if (storedDataJSON) {
@@ -173,12 +193,12 @@ export const Chat = () => {
     const maxRetries = 3;
     const retryDelay = 1000; // 1-second delay between retries
 
-    if (!(sessionStorage.getItem('webSocketURL') || webSocketURL)) {
+    if (!(safeSessionStorage.getItem('webSocketURL') || webSocketURL)) {
       toast.error("Please set a valid WebSocket server in settings");
       return false;
     }
 
-    const url = sessionStorage.getItem('webSocketURL') || webSocketURL;
+    const url = safeSessionStorage.getItem('webSocketURL') || webSocketURL;
     if (!url) {
       toast.error("Please set a valid WebSocket server in settings");
       return false;
@@ -194,7 +214,7 @@ export const Chat = () => {
 
       ws.onopen = () => {
        
-        toast.success("Connected to " + (sessionStorage.getItem('webSocketURL') || webSocketURL), {
+        toast.success("Connected to " + (safeSessionStorage.getItem('webSocketURL') || webSocketURL), {
           id: "websocketSuccessToastId",
         });
         toast.dismiss(websocketLoadingToastId);
@@ -300,8 +320,8 @@ export const Chat = () => {
 
     // updating conversation with new message 
     let updatedMessages    
-    let selectedConversation: Conversation = JSON.parse(window.sessionStorage.getItem('selectedConversation') ?? '{}');
-    let conversations: Conversation[] = JSON.parse(window.sessionStorage.getItem('conversationsHistory')?? '[]')
+          let selectedConversation: Conversation = JSON.parse(safeSessionStorage.getItem('selectedConversation') ?? '{}');
+      let conversations: Conversation[] = JSON.parse(safeSessionStorage.getItem('conversationsHistory')?? '[]')
   
     // logic
     // if this is the first message (of the assistant response to user message), then add the message to the conversation as 'assistant' message

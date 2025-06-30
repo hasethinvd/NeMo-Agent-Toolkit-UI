@@ -1,4 +1,6 @@
 import { NextApiRequest, NextApiResponse } from 'next';
+import { httpsFetch } from '@/utils/app/https-fetch';
+import { getApiUrl } from '@/utils/app/api-config';
 
 interface MFASessionValidateResponse {
   valid: boolean;
@@ -26,7 +28,7 @@ export default async function handler(
     }
 
     // Call Python backend to validate MFA session
-    const response = await fetch(`http://localhost:8000/mfa/session/validate?session_id=${session_id}&user_id=${user_id}`, {
+    const response = await httpsFetch(getApiUrl(`/api/mfa/session/validate?session_id=${session_id}&user_id=${user_id}`), {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',

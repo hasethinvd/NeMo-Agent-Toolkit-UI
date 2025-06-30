@@ -59,7 +59,7 @@ export const ChatInput = ({
   const workflow = getWorkflowName()
 
   // todo add the audio file
-  const recordingStartSound = new Audio('audio/recording.wav');
+  const recordingStartSound = typeof window !== 'undefined' ? new Audio('audio/recording.wav') : null;
 
   const [content, setContent] = useState<string>('');
   const [isTyping, setIsTyping] = useState<boolean>(false);
@@ -144,7 +144,7 @@ export const ChatInput = ({
     }
 
 
-    if (window.innerWidth < 640 && textareaRef && textareaRef.current) {
+    if (typeof window !== 'undefined' && window.innerWidth < 640 && textareaRef && textareaRef.current) {
       textareaRef.current.blur();
     }
   };
@@ -180,7 +180,7 @@ export const ChatInput = ({
 
   const isMobile = () => {
     const userAgent =
-      typeof window.navigator === 'undefined' ? '' : navigator.userAgent;
+      typeof window !== 'undefined' && window.navigator ? navigator.userAgent : '';
     const mobileRegex =
       /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini|Mobile|mobile|CriOS/i;
     return mobileRegex.test(userAgent);
@@ -324,9 +324,13 @@ export const ChatInput = ({
   }, [content, textareaRef]);
 
   const handleSpeechToText = useCallback(() => {
+    if (typeof window === 'undefined') return;
+    
     if (!recognitionRef.current) {
       const SpeechRecognition =
         window?.SpeechRecognition || window?.webkitSpeechRecognition;
+
+      if (!SpeechRecognition) return;
 
       recognitionRef.current = new SpeechRecognition();
       recognitionRef.current.lang = 'en-US';
@@ -350,7 +354,7 @@ export const ChatInput = ({
 
     if (!isRecording) {
       // Play sound when recording starts
-      recordingStartSound.play();
+      recordingStartSound?.play();
       recognitionRef.current.start();
       setIsRecording(true);
     } else {
@@ -367,8 +371,10 @@ export const ChatInput = ({
     };
   }, []);
 
+  const mobileClass = typeof window !== 'undefined' && isMobile() ? 'pb-14' : 'pb-4';
+  
   return (
-    <div className={`absolute bottom-0 left-0 w-full border-transparent bg-gradient-to-b from-transparent via-white to-white pt-6 dark:border-white/20 dark:via-[#343541] dark:to-[#343541] ${isMobile() ? 'pb-14' : 'pb-4'}`}>
+    <div className={`absolute bottom-0 left-0 w-full border-transparent bg-gradient-to-b from-transparent via-white to-white pt-6 dark:border-white/20 dark:via-[#343541] dark:to-[#343541] ${mobileClass}`}>
       <div className="stretch mx-2 mt-4 flex flex-row gap-3 last:mb-2 md:mx-4 md:mt-[52px] 2xl:mx-auto 2xl:max-w-5xl">
         {messageIsStreaming && (
           <button

@@ -13,6 +13,26 @@ interface Props {
   onClose: () => void;
 }
 
+// Helper function to safely access sessionStorage
+const safeSessionStorage = {
+  getItem: (key: string): string | null => {
+    if (typeof window !== 'undefined' && window.sessionStorage) {
+      return sessionStorage.getItem(key);
+    }
+    return null;
+  },
+  setItem: (key: string, value: string): void => {
+    if (typeof window !== 'undefined' && window.sessionStorage) {
+      sessionStorage.setItem(key, value);
+    }
+  },
+  removeItem: (key: string): void => {
+    if (typeof window !== 'undefined' && window.sessionStorage) {
+      sessionStorage.removeItem(key);
+    }
+  }
+};
+
 export const SettingDialog: FC<Props> = ({ open, onClose }) => {
   const { t } = useTranslation('settings');
   const modalRef = useRef<HTMLDivElement>(null);
@@ -22,12 +42,12 @@ export const SettingDialog: FC<Props> = ({ open, onClose }) => {
   } = useContext(HomeContext);
 
   const [theme, setTheme] = useState<'light' | 'dark'>(lightMode);
-  const [chatCompletionEndPoint, setChatCompletionEndPoint] = useState(sessionStorage.getItem('chatCompletionURL') || chatCompletionURL || '');
-  const [webSocketEndPoint, setWebSocketEndPoint] = useState( sessionStorage.getItem('webSocketURL') || webSocketURL || '');
-  const [webSocketSchema, setWebSocketSchema] = useState( sessionStorage.getItem('webSocketSchema') || schema || '');
-  const [isIntermediateStepsEnabled, setIsIntermediateStepsEnabled] = useState(sessionStorage.getItem('enableIntermediateSteps') ? sessionStorage.getItem('enableIntermediateSteps') === 'true' : enableIntermediateSteps);
-  const [detailsToggle, setDetailsToggle] = useState( sessionStorage.getItem('expandIntermediateSteps') === 'true' ? true : expandIntermediateSteps);
-  const [intermediateStepOverrideToggle, setIntermediateStepOverrideToggle] = useState( sessionStorage.getItem('intermediateStepOverride') === 'false' ? false : intermediateStepOverride);
+  const [chatCompletionEndPoint, setChatCompletionEndPoint] = useState(chatCompletionURL || '');
+  const [webSocketEndPoint, setWebSocketEndPoint] = useState(webSocketURL || '');
+  const [webSocketSchema, setWebSocketSchema] = useState(schema || '');
+  const [isIntermediateStepsEnabled, setIsIntermediateStepsEnabled] = useState(enableIntermediateSteps);
+  const [detailsToggle, setDetailsToggle] = useState(expandIntermediateSteps);
+  const [intermediateStepOverrideToggle, setIntermediateStepOverrideToggle] = useState(intermediateStepOverride);
   
   const [jiraUsernameValue, setJiraUsernameValue] = useState('');
   const [jiraTokenValue, setJiraTokenValue] = useState('');
@@ -41,6 +61,29 @@ export const SettingDialog: FC<Props> = ({ open, onClose }) => {
   const [mfaSetupData, setMfaSetupData] = useState<any>(null);
   const [mfaVerifyData, setMfaVerifyData] = useState<any>(null);
   const [mfaCode, setMfaCode] = useState('');
+
+  // Load values from sessionStorage after component mounts (client-side only)
+  useEffect(() => {
+    const storedChatURL = safeSessionStorage.getItem('chatCompletionURL');
+    const storedWebSocketURL = safeSessionStorage.getItem('webSocketURL');
+    const storedWebSocketSchema = safeSessionStorage.getItem('webSocketSchema');
+    const storedIntermediateSteps = safeSessionStorage.getItem('enableIntermediateSteps');
+    const storedExpandSteps = safeSessionStorage.getItem('expandIntermediateSteps');
+    const storedStepOverride = safeSessionStorage.getItem('intermediateStepOverride');
+
+    if (storedChatURL) setChatCompletionEndPoint(storedChatURL);
+    if (storedWebSocketURL) setWebSocketEndPoint(storedWebSocketURL);
+    if (storedWebSocketSchema) setWebSocketSchema(storedWebSocketSchema);
+    if (storedIntermediateSteps !== null) {
+      setIsIntermediateStepsEnabled(storedIntermediateSteps === 'true');
+    }
+    if (storedExpandSteps !== null) {
+      setDetailsToggle(storedExpandSteps === 'true');
+    }
+    if (storedStepOverride !== null) {
+      setIntermediateStepOverrideToggle(storedStepOverride !== 'false');
+    }
+  }, []);
 
   useEffect(() => {
     const updateCredentialStatus = async () => {
@@ -122,12 +165,28 @@ export const SettingDialog: FC<Props> = ({ open, onClose }) => {
       jiraTokenLength: jiraTokenValue?.length
     });
     
+    console.log('🔍 Debug: Checking required fields:', {
+      chatCompletionEndPoint: chatCompletionEndPoint,
+      webSocketEndPoint: webSocketEndPoint,
+      hasCompletion: !!chatCompletionEndPoint,
+      hasWebSocket: !!webSocketEndPoint
+    });
+    
     if(!chatCompletionEndPoint || !webSocketEndPoint) {
+      console.log('❌ Debug: Missing required fields, returning early');
       toast.error('Please fill all the fields to save settings');
       return;
     }
 
     // If trying to save JIRA credentials, handle MFA automatically
+    console.log('🔍 Debug: About to check JIRA credentials:', {
+      jiraUsernameValue: jiraUsernameValue,
+      jiraTokenValue: jiraTokenValue ? '***HIDDEN***' : null,
+      hasUsername: !!jiraUsernameValue,
+      hasToken: !!jiraTokenValue,
+      condition: !!(jiraUsernameValue && jiraTokenValue)
+    });
+    
     if (jiraUsernameValue && jiraTokenValue) {
       console.log('🔐 JIRA credentials detected, starting MFA flow for user:', jiraUsernameValue);
       try {
@@ -194,8 +253,8 @@ export const SettingDialog: FC<Props> = ({ open, onClose }) => {
           }
         } else {
           // MFA is set up - check if we have an active session
-          const storedSessionId = sessionStorage.getItem('mfa_session_id');
-          const storedSessionUser = sessionStorage.getItem('mfa_session_user');
+          const storedSessionId = safeSessionStorage.getItem('mfa_session_id');
+          const storedSessionUser = safeSessionStorage.getItem('mfa_session_user');
           
           if (!storedSessionId || storedSessionUser !== jiraUsernameValue) {
             // No active session - fetch QR code and show MFA verification modal
@@ -218,11 +277,13 @@ export const SettingDialog: FC<Props> = ({ open, onClose }) => {
                   qrCodeLength: setupData.qr_code ? setupData.qr_code.length : 0,
                   isExisting: setupData.is_existing
                 });
-                setMfaVerifyData({
+                const mfaData = {
                   username: jiraUsernameValue,
                   email: `${jiraUsernameValue}@nvidia.com`,
                   qr_code: setupData.qr_code
-                });
+                };
+                console.log('🔍 Debug: Setting mfaVerifyData (1st):', mfaData);
+                setMfaVerifyData(mfaData);
               } else {
                 console.log('SettingDialog: MFA Setup Response failed (1st):', mfaSetupResponse.status);
                 setMfaVerifyData({
@@ -238,7 +299,9 @@ export const SettingDialog: FC<Props> = ({ open, onClose }) => {
               });
             }
             
+            console.log('🔍 Debug: Setting MFA verify modal to true');
             setShowMfaVerify(true);
+            console.log('🔍 Debug: MFA verify modal state should now be true');
             toast('🔐 Please verify your MFA to complete JIRA setup.');
             return; // Don't save JIRA credentials yet - wait for MFA verification
           }
@@ -247,8 +310,8 @@ export const SettingDialog: FC<Props> = ({ open, onClose }) => {
           const sessionResponse = await fetch(`/api/mfa/session/validate?session_id=${storedSessionId}&user_id=${jiraUsernameValue}`);
           if (!sessionResponse.ok) {
             // Session expired - fetch QR code and show MFA verification modal
-            sessionStorage.removeItem('mfa_session_id');
-            sessionStorage.removeItem('mfa_session_user');
+            safeSessionStorage.removeItem('mfa_session_id');
+            safeSessionStorage.removeItem('mfa_session_user');
             
             try {
               const mfaSetupResponse = await fetch('/api/mfa', {
@@ -289,8 +352,8 @@ export const SettingDialog: FC<Props> = ({ open, onClose }) => {
           const sessionData = await sessionResponse.json();
           if (!sessionData.valid) {
             // Session invalid - fetch QR code and show MFA verification modal
-            sessionStorage.removeItem('mfa_session_id');
-            sessionStorage.removeItem('mfa_session_user');
+            safeSessionStorage.removeItem('mfa_session_id');
+            safeSessionStorage.removeItem('mfa_session_user');
             
             try {
               const mfaSetupResponse = await fetch('/api/mfa', {
@@ -346,12 +409,12 @@ export const SettingDialog: FC<Props> = ({ open, onClose }) => {
     homeDispatch({ field: 'intermediateStepOverride', value: intermediateStepOverrideToggle });
     homeDispatch({ field: 'enableIntermediateSteps', value: isIntermediateStepsEnabled });
     
-    sessionStorage.setItem('chatCompletionURL', chatCompletionEndPoint);
-    sessionStorage.setItem('webSocketURL', webSocketEndPoint);
-    sessionStorage.setItem('webSocketSchema', webSocketSchema);
-    sessionStorage.setItem('expandIntermediateSteps', String(detailsToggle));
-    sessionStorage.setItem('intermediateStepOverride', String(intermediateStepOverrideToggle));
-    sessionStorage.setItem('enableIntermediateSteps', String(isIntermediateStepsEnabled));
+    safeSessionStorage.setItem('chatCompletionURL', chatCompletionEndPoint);
+    safeSessionStorage.setItem('webSocketURL', webSocketEndPoint);
+    safeSessionStorage.setItem('webSocketSchema', webSocketSchema);
+    safeSessionStorage.setItem('expandIntermediateSteps', String(detailsToggle));
+    safeSessionStorage.setItem('intermediateStepOverride', String(intermediateStepOverrideToggle));
+    safeSessionStorage.setItem('enableIntermediateSteps', String(isIntermediateStepsEnabled));
     
     // JIRA credentials are now handled through MFA flow above
     // This section should not run if JIRA credentials exist
@@ -389,8 +452,8 @@ export const SettingDialog: FC<Props> = ({ open, onClose }) => {
       if (hasMFA) {
         try {
           // Clear any stored MFA session data (disconnects MFA but keeps the secret)
-          sessionStorage.removeItem('mfa_session_id');
-          sessionStorage.removeItem('mfa_session_user');
+          safeSessionStorage.removeItem('mfa_session_id');
+          safeSessionStorage.removeItem('mfa_session_user');
           clearedItems.push('MFA session (authenticator account preserved)');
         } catch (mfaError) {
           console.error('Error clearing MFA session:', mfaError);
@@ -452,8 +515,8 @@ export const SettingDialog: FC<Props> = ({ open, onClose }) => {
         if (data.success) {
           // Store the session ID
           if (data.session_id) {
-            sessionStorage.setItem('mfa_session_id', data.session_id);
-            sessionStorage.setItem('mfa_session_user', userId);
+            safeSessionStorage.setItem('mfa_session_id', data.session_id);
+            safeSessionStorage.setItem('mfa_session_user', userId);
           }
           
           // Close modals
@@ -519,11 +582,29 @@ export const SettingDialog: FC<Props> = ({ open, onClose }) => {
         onClose();
       } else {
         const errorData = await response.json();
+        
+        // Clear MFA session when JIRA validation fails to require re-authentication
+        safeSessionStorage.removeItem('mfa_session_id');
+        safeSessionStorage.removeItem('mfa_session_user');
+        
+        // Reset MFA modal states to ensure clean state
+        resetMfaModalStates();
+        
         toast.error(`JIRA validation failed: ${errorData.error || 'Unknown error'}`);
+        toast('🔐 Please verify MFA again to retry JIRA credentials.');
       }
     } catch (error) {
       console.error('JIRA save error:', error);
+      
+      // Clear MFA session when JIRA validation has network/other errors to require re-authentication
+      safeSessionStorage.removeItem('mfa_session_id');
+      safeSessionStorage.removeItem('mfa_session_user');
+      
+      // Reset MFA modal states to ensure clean state
+      resetMfaModalStates();
+      
       toast.error('Failed to save JIRA credentials');
+      toast('🔐 Please verify MFA again to retry JIRA credentials.');
     } finally {
       setIsSaving(false);
     }
@@ -540,22 +621,22 @@ export const SettingDialog: FC<Props> = ({ open, onClose }) => {
         className="w-full max-w-lg max-h-[90vh] bg-white dark:bg-[#202123] rounded-2xl shadow-lg transform transition-all relative overflow-hidden"
       >
         {/* Header */}
-        <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
-          <h2 className="text-xl font-semibold text-gray-900 dark:text-white">{t('Settings')}</h2>
+        <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-700">
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-white">{t('Settings')}</h2>
         </div>
 
         {/* Scrollable Content */}
-        <div className="px-6 py-4 overflow-y-auto max-h-[calc(90vh-140px)] space-y-4">
+        <div className="px-4 py-3 overflow-y-auto max-h-[calc(90vh-120px)] space-y-4">
           {/* General Settings */}
           <div className="space-y-4">
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center space-x-2">
+            <h3 className="text-base font-semibold text-gray-900 dark:text-white flex items-center space-x-2">
               <span>⚙️</span>
               <span>General Settings</span>
             </h3>
 
             <div className="space-y-3">
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('Theme')}</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">{t('Theme')}</label>
                 <select
                   className="w-full p-2 rounded-lg bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 border border-gray-300 dark:border-gray-600 text-sm"
                   value={theme}
@@ -567,7 +648,7 @@ export const SettingDialog: FC<Props> = ({ open, onClose }) => {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('WebSocket Schema')}</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">{t('WebSocket Schema')}</label>
                 <select
                   className="w-full p-2 rounded-lg bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 border border-gray-300 dark:border-gray-600 text-sm"
                   value={webSocketSchema}
@@ -580,71 +661,71 @@ export const SettingDialog: FC<Props> = ({ open, onClose }) => {
                   ))}
                 </select>
               </div>
-            </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('HTTP URL for Chat Completion')}</label>
-              <input
-                type="text"
-                value={chatCompletionEndPoint}
-                onChange={(e) => setChatCompletionEndPoint(e.target.value)}
-                className="w-full p-2 rounded-lg bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 border border-gray-300 dark:border-gray-600 text-sm"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('WebSocket URL for Chat Completion')}</label>
-              <input
-                type="text"
-                value={webSocketEndPoint}
-                onChange={(e) => setWebSocketEndPoint(e.target.value)}
-                className="w-full p-2 rounded-lg bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 border border-gray-300 dark:border-gray-600 text-sm"
-              />
-            </div>
-
-            {/* Intermediate Steps Options */}
-            <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4 space-y-3">
-              <h4 className="text-sm font-semibold text-gray-900 dark:text-white">Intermediate Steps</h4>
-              
-              <div className="flex items-center">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">{t('HTTP / HTTPS URL for Chat Completion')}</label>
                 <input
-                  type="checkbox"
-                  id="enableIntermediateSteps"
-                  checked={isIntermediateStepsEnabled}
-                  onChange={() => setIsIntermediateStepsEnabled(!isIntermediateStepsEnabled)}
-                  className="mr-3 rounded"
+                  type="text"
+                  value={chatCompletionEndPoint}
+                  onChange={(e) => setChatCompletionEndPoint(e.target.value)}
+                  className="w-full p-2 rounded-lg bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 border border-gray-300 dark:border-gray-600 text-sm"
                 />
-                <label htmlFor="enableIntermediateSteps" className="text-sm text-gray-700 dark:text-gray-300">
-                  Enable Intermediate Steps
-                </label>
               </div>
 
-              <div className="flex items-center">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">{t('WebSocket URL for Chat Completion')}</label>
                 <input
-                  type="checkbox"
-                  id="detailsToggle"
-                  checked={detailsToggle}
-                  onChange={() => setDetailsToggle(!detailsToggle)}
-                  disabled={!isIntermediateStepsEnabled}
-                  className="mr-3 rounded"
+                  type="text"
+                  value={webSocketEndPoint}
+                  onChange={(e) => setWebSocketEndPoint(e.target.value)}
+                  className="w-full p-2 rounded-lg bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 border border-gray-300 dark:border-gray-600 text-sm"
                 />
-                <label htmlFor="detailsToggle" className="text-sm text-gray-700 dark:text-gray-300">
-                  Expand Intermediate Steps by default
-                </label>
               </div>
 
-              <div className="flex items-center">
-                <input
-                  type="checkbox"
-                  id="intermediateStepOverrideToggle"
-                  checked={intermediateStepOverrideToggle}
-                  onChange={() => setIntermediateStepOverrideToggle(!intermediateStepOverrideToggle)}
-                  disabled={!isIntermediateStepsEnabled}
-                  className="mr-3 rounded"
-                />
-                <label htmlFor="intermediateStepOverrideToggle" className="text-sm text-gray-700 dark:text-gray-300">
-                  Override intermediate Steps with same Id
-                </label>
+              {/* Intermediate Steps Options */}
+              <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-3 space-y-2.5">
+                <h4 className="text-sm font-semibold text-gray-900 dark:text-white">Intermediate Steps</h4>
+                
+                <div className="flex items-center">
+                  <input
+                    type="checkbox"
+                    id="enableIntermediateSteps"
+                    checked={isIntermediateStepsEnabled}
+                    onChange={() => setIsIntermediateStepsEnabled(!isIntermediateStepsEnabled)}
+                    className="mr-3 rounded"
+                  />
+                  <label htmlFor="enableIntermediateSteps" className="text-sm text-gray-700 dark:text-gray-300">
+                    Enable Intermediate Steps
+                  </label>
+                </div>
+
+                <div className="flex items-center">
+                  <input
+                    type="checkbox"
+                    id="detailsToggle"
+                    checked={detailsToggle}
+                    onChange={() => setDetailsToggle(!detailsToggle)}
+                    disabled={!isIntermediateStepsEnabled}
+                    className="mr-3 rounded"
+                  />
+                  <label htmlFor="detailsToggle" className="text-sm text-gray-700 dark:text-gray-300">
+                    Expand Intermediate Steps by default
+                  </label>
+                </div>
+
+                <div className="flex items-center">
+                  <input
+                    type="checkbox"
+                    id="intermediateStepOverrideToggle"
+                    checked={intermediateStepOverrideToggle}
+                    onChange={() => setIntermediateStepOverrideToggle(!intermediateStepOverrideToggle)}
+                    disabled={!isIntermediateStepsEnabled}
+                    className="mr-3 rounded"
+                  />
+                  <label htmlFor="intermediateStepOverrideToggle" className="text-sm text-gray-700 dark:text-gray-300">
+                    Override intermediate Steps with same Id
+                  </label>
+                </div>
               </div>
             </div>
           </div>
@@ -652,37 +733,23 @@ export const SettingDialog: FC<Props> = ({ open, onClose }) => {
           {/* Security & JIRA Section */}
           <div className="space-y-4">
             {/* Security Dashboard */}
-            <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4">
-              <div className="flex items-center space-x-2 mb-3">
-                <span className="text-lg">📊</span>
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Security Dashboard</h3>
-              </div>
+            <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-1">
               <SecurityDashboard />
             </div>
 
             {/* JIRA Integration */}
-            <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4">
-              <div className="flex items-center space-x-2 mb-3">
-                <span className="text-lg">🔗</span>
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">JIRA Integration</h3>
+            <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-3">
+              <div className="flex items-center space-x-2 mb-2.5">
+                <span className="text-base">🔗</span>
+                <h3 className="text-base font-semibold text-gray-900 dark:text-white">JIRA Integration</h3>
               </div>
               
               <div className="space-y-3">
                 <JiraStatus />
                 
-                {/* Security Notice */}
-                <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg p-3">
-                  <div className="flex items-start space-x-2">
-                    <span className="text-blue-500 text-sm">🔒</span>
-                    <p className="text-sm text-blue-700 dark:text-blue-300">
-                      <strong>Secure Setup:</strong> Multi-factor authentication will be automatically configured when you save your JIRA credentials for enhanced security.
-                    </p>
-                  </div>
-                </div>
-                
                 <div className="space-y-3">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('JIRA Username')}</label>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">{t('JIRA Username')}</label>
                     <input
                       type="text"
                       value={jiraUsernameValue}
@@ -693,7 +760,7 @@ export const SettingDialog: FC<Props> = ({ open, onClose }) => {
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('JIRA Token')}</label>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">{t('JIRA Token')}</label>
                     <input
                       type="password"
                       value={jiraTokenValue}
@@ -702,36 +769,25 @@ export const SettingDialog: FC<Props> = ({ open, onClose }) => {
                       className="w-full p-2 rounded-lg bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 border border-gray-300 dark:border-gray-600 text-sm"
                     />
                   </div>
+
+                  {/* Clear JIRA Settings Button */}
+                  <div className="pt-2.5 border-t border-gray-200 dark:border-gray-600">
+                    <button
+                      type="button"
+                      onClick={handleClearJira}
+                      className="w-full px-4 py-2.5 bg-red-600 hover:bg-red-700 text-white font-medium rounded-lg transition-colors text-sm"
+                    >
+                      Clear JIRA Settings
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
-
-
-
-            {/* Clear Credentials - At Bottom */}
-            {hasCredentials && (
-              <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4">
-                <div className="flex items-center space-x-2 mb-3">
-                  <span className="text-lg">🗑️</span>
-                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Reset JIRA Settings</h3>
-                </div>
-                <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
-                  This will clear your JIRA credentials and disconnect MFA session. Your authenticator app account will be preserved for easy reconnection.
-                </p>
-                <button
-                  type="button"
-                  className="w-full px-4 py-3 rounded-lg text-white bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 transition-all duration-200 font-medium text-sm"
-                  onClick={handleClearJira}
-                >
-                  🗑️ {t('Clear JIRA Settings')}
-                </button>
-              </div>
-            )}
           </div>
         </div>
 
         {/* Footer */}
-                <div className="px-6 py-4 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800">
+                <div className="px-4 py-3 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800">
           <div className="flex justify-end items-center">
             <div className="flex gap-3">
               <button
@@ -930,6 +986,11 @@ export const SettingDialog: FC<Props> = ({ open, onClose }) => {
       )}
 
       {/* MFA Verification Modal */}
+      {console.log('🔍 Debug: Checking MFA modal render condition:', {
+        showMfaVerify: showMfaVerify,
+        mfaVerifyData: mfaVerifyData,
+        condition: !!(showMfaVerify && mfaVerifyData)
+      })}
       {showMfaVerify && mfaVerifyData && (
         <MFAVerifyModal 
           isOpen={showMfaVerify}
