@@ -92,7 +92,7 @@ export const Chat = () => {
   const webSocketRef = useRef<WebSocket | null>(null);
   const webSocketConnectedRef = useRef(false);
   const webSocketModeRef = useRef(safeSessionStorage.getItem('webSocketMode') === 'false' ? false : webSocketMode);
-  let websocketLoadingToastId: any = null;
+  const websocketLoadingToastIdRef = useRef<any>(null);
   const lastScrollTop = useRef(0); // Store last known scroll position
 
   // Add these variables near the top of your component
@@ -177,7 +177,7 @@ export const Chat = () => {
 
     // todo cancel ongoing connection attempts
     else {
-      toast.dismiss(websocketLoadingToastId);
+      toast.dismiss(websocketLoadingToastIdRef.current);
     }
     
     return () => {
@@ -207,7 +207,7 @@ export const Chat = () => {
     return new Promise((resolve) => {
       const ws = new WebSocket(url);
 
-      websocketLoadingToastId = toast.loading(
+      websocketLoadingToastIdRef.current = toast.loading(
         "WebSocket is not connected, trying to connect...",
         { id: "websocketLoadingToastId" }
       );
@@ -217,7 +217,7 @@ export const Chat = () => {
         toast.success("Connected to " + (safeSessionStorage.getItem('webSocketURL') || webSocketURL), {
           id: "websocketSuccessToastId",
         });
-        toast.dismiss(websocketLoadingToastId);
+        toast.dismiss(websocketLoadingToastIdRef.current);
 
         // using ref due to usecallback for handlesend which will be recreated during next render when dependency array changes
         // so values inside of are still one and be updated after next render 
@@ -252,7 +252,7 @@ export const Chat = () => {
           webSocketConnectedRef.current = false;
           homeDispatch({ field: "loading", value: false });
           homeDispatch({ field: "messageIsStreaming", value: false });
-          toast.dismiss(websocketLoadingToastId);
+          toast.dismiss(websocketLoadingToastIdRef.current);
           toast.error("WebSocket connection failed.", {
             id: "websocketErrorToastId",
           });

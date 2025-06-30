@@ -180,7 +180,22 @@ NOTE: Most of the time, you will want to select /chat/stream for intermediate re
 - `WebSocket URL for Completion`: WebSocket URL to connect to running AIQ Toolkit server
 - `WebSocket Schema`: Workflow schema type over WebSocket connection
 
-### 🔐 MFA Setup
+### 🔐 JIRA Integration & MFA Setup
+
+#### JIRA Credentials Configuration
+Configure JIRA integration directly through the Settings interface:
+
+1. **Access Settings**: Click the Settings icon (⚙️) in the bottom left corner
+2. **JIRA Integration Section**: Locate the "JIRA Integration" section in the settings panel
+3. **Enter Credentials**: 
+   - **JIRA Username**: Enter your NVIDIA username
+   - **JIRA Token**: Enter your JIRA API token (generate at https://jirasw.nvidia.com/plugins/servlet/de.resolution.apitokenauth/admin)
+4. **Connection Status**: Monitor the connection indicator ("JIRA Not Connected" → "JIRA Connected")
+5. **Save Settings**: Click "Save" to store credentials securely
+
+<img src="public/screenshots/ui_jira_integration_settings.png" alt="JIRA Integration Settings" width="400"/>
+
+#### MFA Setup
 When JIRA credentials are configured, MFA is automatically set up:
 
 1. **Automatic Setup**: MFA is initialized when you save JIRA credentials
