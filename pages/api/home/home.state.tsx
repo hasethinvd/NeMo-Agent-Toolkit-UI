@@ -1,7 +1,7 @@
 import { Conversation, Message } from '@/types/chat';
 import { FolderInterface } from '@/types/folder';
 import { t } from 'i18next';
-import { env } from 'next-runtime-env'
+import { getApiUrl } from '@/utils/app/api-config';
 
 export interface HomeInitialState {
   loading: boolean;
@@ -26,6 +26,8 @@ export interface HomeInitialState {
   expandIntermediateSteps?: boolean;
   intermediateStepOverride?: boolean;
   autoScroll?: boolean;
+  jiraToken?: string;
+  jiraUsername?: string;
   additionalConfig: any;
 }
 
@@ -41,16 +43,18 @@ export const initialState: HomeInitialState = {
   currentFolder: undefined,
   messageError: false,
   searchTerm: '',
-  chatHistory: env('NEXT_PUBLIC_CHAT_HISTORY_DEFAULT_ON') === 'true' || process?.env?.NEXT_PUBLIC_CHAT_HISTORY_DEFAULT_ON === 'true' ? true : false,
-  chatCompletionURL: env('NEXT_PUBLIC_HTTP_CHAT_COMPLETION_URL') || process?.env?.NEXT_PUBLIC_HTTP_CHAT_COMPLETION_URL || 'http://127.0.0.1:8000/chat/stream',
-  webSocketMode: env('NEXT_PUBLIC_WEB_SOCKET_DEFAULT_ON') === 'true' || process?.env?.NEXT_PUBLIC_WEB_SOCKET_DEFAULT_ON === 'true' ? true : false,
+  chatHistory: process?.env?.NEXT_PUBLIC_CHAT_HISTORY_DEFAULT_ON === 'true' || false,
+  chatCompletionURL: process?.env?.NEXT_PUBLIC_HTTP_CHAT_COMPLETION_URL || getApiUrl('/chat/stream'),
+  webSocketMode: process?.env?.NEXT_PUBLIC_WEB_SOCKET_DEFAULT_ON === 'true' || false,
   webSocketConnected: false,
-  webSocketURL: env('NEXT_PUBLIC_WEBSOCKET_CHAT_COMPLETION_URL') || process?.env?.NEXT_PUBLIC_WEBSOCKET_CHAT_COMPLETION_URL || 'ws://127.0.0.1:8000/websocket',
+  webSocketURL: process?.env?.NEXT_PUBLIC_WEBSOCKET_CHAT_COMPLETION_URL || getApiUrl('/websocket').replace('https://', 'wss://').replace('http://', 'ws://'),
   webSocketSchema: 'chat_stream',
   webSocketSchemas: ['chat_stream', 'chat', 'generate_stream', 'generate'],
   enableIntermediateSteps: env('NEXT_PUBLIC_ENABLE_INTERMEDIATE_STEPS') === 'true' || process?.env?.NEXT_PUBLIC_ENABLE_INTERMEDIATE_STEPS === 'true' ? true : false,
   expandIntermediateSteps: false,
   intermediateStepOverride: true,
   autoScroll: true,
+  jiraToken: process?.env?.NEXT_PUBLIC_JIRA_TOKEN || '',
+  jiraUsername: process?.env?.NEXT_PUBLIC_JIRA_USERNAME || '',
   additionalConfig: {},
 };

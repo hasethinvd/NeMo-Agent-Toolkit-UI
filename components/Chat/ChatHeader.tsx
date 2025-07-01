@@ -14,6 +14,7 @@ import {
 } from '@tabler/icons-react';
 import HomeContext from '@/pages/api/home/home.context';
 import { getWorkflowName } from '@/utils/app/helper';
+import { JiraTokenCountdown } from '../Settings/JiraTokenCountdown';
 
 export const ChatHeader = ({ webSocketModeRef = {} }) => {
     const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -60,7 +61,7 @@ export const ChatHeader = ({ webSocketModeRef = {} }) => {
                 :
                 <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 mx-auto flex flex-col space-y-5 md:space-y-10 px-3 pt-5 md:pt-12 sm:max-w-[600px] text-center">
                   <div className="text-3xl font-semibold text-gray-800 dark:text-white">
-                    Hi, I'm {workflow}
+                    Hi, I'm AIQ TPM assistant
                   </div>
                   <div className="text-lg text-gray-600 dark:text-gray-400">
                     How can I assist you today?
@@ -80,6 +81,11 @@ export const ChatHeader = ({ webSocketModeRef = {} }) => {
                 </button>
 
                 <div className={`flex sm: gap-1 md:gap-4 overflow-hidden transition-all duration-300 ${isExpanded ? 'w-auto opacity-100' : 'w-0 opacity-0'}`}>
+                    {/* JIRA Token Countdown */}
+                    <div className="flex items-center">
+                        <JiraTokenCountdown />
+                    </div>
+
                     {/* Chat History Toggle */}
                     <div className="flex items-center gap-2 whitespace-nowrap">
                         <label className="flex items-center gap-2 cursor-pointer flex-shrink-0">

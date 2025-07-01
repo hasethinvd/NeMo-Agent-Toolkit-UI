@@ -11,8 +11,7 @@ export default function Document(props: Props) {
     <Html lang={currentLocale}>
       <Head>
         <meta name="apple-mobile-web-app-capable" content="yes" />
-        <meta name="apple-mobile-web-app-title" content="AIQ Toolkit-UI"></meta>
-        <script src="/__ENV.js" />
+        <meta name="apple-mobile-web-app-title" content="AIQ TPM-UI"></meta>
       </Head>
       <body>
         <Main />

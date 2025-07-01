@@ -1,5 +1,6 @@
 import { ChatBody } from '@/types/chat';
 import { delay } from '@/utils/app/helper';
+import { decryptCredentials } from '@/utils/app/crypto';
 export const config = {
   runtime: 'edge',
   api: {
@@ -16,18 +17,39 @@ const handler = async (req: Request): Promise<Response> => {
   let {
     chatCompletionURL = '',
     messages = [],
+    jiraCredentials,
     additionalProps = {
       enableIntermediateSteps: true
     }
   } = (await req.json()) as ChatBody;
 
   try {    
-    let payload
+    let payload;
+    
+    // Decrypt JIRA credentials if they're encrypted
+    let decryptedJiraCredentials;
+    if (jiraCredentials) {
+      if ('encrypted' in jiraCredentials) {
+        try {
+          decryptedJiraCredentials = await decryptCredentials(jiraCredentials.encrypted);
+          console.log('✅ JIRA credentials successfully decrypted on server');
+        } catch (error) {
+          console.error('❌ Failed to decrypt JIRA credentials on server:', error);
+          decryptedJiraCredentials = undefined;
+        }
+      } else {
+        // Legacy plain credentials (fallback for compatibility)
+        console.log('⚠️ Using legacy plain text JIRA credentials');
+        decryptedJiraCredentials = jiraCredentials;
+      }
+    }
+    
     // for generate end point the request schema is {input_message: "user question"}
     if(chatCompletionURL.includes('generate')) {
       if (messages?.length > 0 && messages[messages.length - 1]?.role === 'user') {
         payload = {
-          input_message: messages[messages.length - 1]?.content ?? ''
+          input_message: messages[messages.length - 1]?.content ?? '',
+          jira_credentials: decryptedJiraCredentials?.username && decryptedJiraCredentials?.token ? decryptedJiraCredentials : undefined
         };
       } else {
         throw new Error('User message not found: messages array is empty or invalid.');
@@ -46,6 +68,7 @@ const handler = async (req: Request): Promise<Response> => {
         top_k: 0,
         collection_name: "string",
         stop: true,
+        jira_credentials: decryptedJiraCredentials?.username && decryptedJiraCredentials?.token ? decryptedJiraCredentials : undefined,
         additionalProp1: {}
       }
     }
