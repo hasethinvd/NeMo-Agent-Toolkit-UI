@@ -401,6 +401,12 @@ export const SettingDialog: FC<Props> = ({ open, onClose }) => {
       }
     }
 
+    console.log('🔧 Saving settings with values:', {
+      webSocketEndPoint,
+      chatCompletionEndPoint,
+      webSocketSchema
+    });
+
     homeDispatch({ field: 'lightMode', value: theme });
     homeDispatch({ field: 'chatCompletionURL', value: chatCompletionEndPoint });
     homeDispatch({ field: 'webSocketURL', value: webSocketEndPoint });
@@ -420,7 +426,9 @@ export const SettingDialog: FC<Props> = ({ open, onClose }) => {
     // This section should not run if JIRA credentials exist
     console.log('🔧 Skipping direct JIRA save - handled by MFA flow');
 
+    console.log('🔧 Dispatching websocket-settings-changed event');
     window.dispatchEvent(new Event('storage'));
+    window.dispatchEvent(new Event('websocket-settings-changed'));
     window.dispatchEvent(new Event('jira-credentials-changed'));
 
     toast.success('Settings saved successfully');
@@ -471,6 +479,7 @@ export const SettingDialog: FC<Props> = ({ open, onClose }) => {
       
       // Dispatch events to notify other components
       window.dispatchEvent(new Event('storage'));
+      window.dispatchEvent(new Event('websocket-settings-changed'));
       window.dispatchEvent(new Event('jira-credentials-changed'));
       
       if (clearedItems.length > 0) {
@@ -578,6 +587,7 @@ export const SettingDialog: FC<Props> = ({ open, onClose }) => {
         
         // Update states and close dialog
         window.dispatchEvent(new Event('storage'));
+        window.dispatchEvent(new Event('websocket-settings-changed'));
         window.dispatchEvent(new Event('jira-credentials-changed'));
         onClose();
       } else {

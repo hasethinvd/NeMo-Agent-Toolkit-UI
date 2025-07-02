@@ -55,6 +55,13 @@ const safeSessionStorage = {
 
 export const Chat = () => {
   const { t } = useTranslation('chat');
+  
+  // Debug: Test event system
+  const testEventSystem = () => {
+    console.log('🧪 Testing event system manually');
+    window.dispatchEvent(new Event('websocket-settings-changed'));
+  };
+  
   const {
     state: {
       selectedConversation,
@@ -171,12 +178,27 @@ export const Chat = () => {
   }, [selectedConversation]);
 
   useEffect(() => {
-    if (webSocketModeRef?.current && !webSocketConnectedRef.current) {
-      connectWebSocket();
-    }
-
-    // todo cancel ongoing connection attempts
-    else {
+    // Check if WebSocket mode is enabled
+    if (webSocketModeRef?.current) {
+      const currentUrl = safeSessionStorage.getItem('webSocketURL') || webSocketURL;
+      const connectedUrl = webSocketRef.current?.url;
+      
+      console.log('WebSocket URL useEffect triggered:', { currentUrl, connectedUrl, connected: webSocketConnectedRef.current });
+      
+      // Connect if not connected OR if the URL has changed
+      if (!webSocketConnectedRef.current || (connectedUrl && currentUrl && connectedUrl !== currentUrl)) {
+        // Close existing connection if URL changed
+        if (webSocketConnectedRef.current && connectedUrl && currentUrl && connectedUrl !== currentUrl) {
+          console.log('WebSocket URL changed in useEffect, closing existing connection');
+          webSocketRef.current?.close();
+          webSocketConnectedRef.current = false;
+          homeDispatch({ field: "webSocketConnected", value: false });
+        }
+        
+        connectWebSocket();
+      }
+    } else {
+      // WebSocket mode disabled, dismiss any loading toasts
       toast.dismiss(websocketLoadingToastIdRef.current);
     }
     
@@ -187,6 +209,58 @@ export const Chat = () => {
       }
     };
   }, [webSocketModeRef?.current, webSocketURL]);
+
+  // Add custom event listener to handle settings changes
+  useEffect(() => {
+    console.log('🔧 Setting up websocket-settings-changed event listener');
+    
+    const handleSettingsChange = () => {
+      console.log('🔧 Settings changed event received');
+      // Force re-evaluation of WebSocket connection when settings change
+      const currentUrl = safeSessionStorage.getItem('webSocketURL') || webSocketURL;
+      const connectedUrl = webSocketRef.current?.url;
+      
+      console.log('🔧 URL comparison:', { 
+        currentUrl, 
+        connectedUrl, 
+        areEqual: connectedUrl === currentUrl,
+        wsMode: webSocketModeRef?.current,
+        wsConnected: webSocketConnectedRef.current
+      });
+      
+      // Reconnect if WebSocket mode is enabled AND URLs are different
+      if (webSocketModeRef?.current && currentUrl) {
+        const shouldReconnect = !webSocketConnectedRef.current || 
+                               (connectedUrl && connectedUrl !== currentUrl);
+        
+        if (shouldReconnect) {
+          console.log('🔧 Settings changed, reconnecting WebSocket with new URL');
+          if (webSocketRef.current) {
+            webSocketRef.current?.close();
+            webSocketConnectedRef.current = false;
+            homeDispatch({ field: "webSocketConnected", value: false });
+          }
+          connectWebSocket();
+        } else {
+          console.log('🔧 No reconnection needed:', {
+            reason: connectedUrl === currentUrl ? 'URLs are the same' : 'Unknown'
+          });
+        }
+      } else {
+        console.log('🔧 No reconnection needed:', {
+          reason: !webSocketModeRef?.current ? 'WebSocket mode disabled' :
+                  !currentUrl ? 'No current URL configured' : 'Unknown'
+        });
+      }
+    };
+
+    window.addEventListener('websocket-settings-changed', handleSettingsChange);
+    
+    return () => {
+      console.log('🔧 Removing websocket-settings-changed event listener');
+      window.removeEventListener('websocket-settings-changed', handleSettingsChange);
+    };
+  }, [webSocketURL]);
 
   const connectWebSocket = async (retryCount = 0) => {
 
