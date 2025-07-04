@@ -1,6 +1,8 @@
 import { ChatBody } from '@/types/chat';
 import { delay } from '@/utils/app/helper';
 import { decryptCredentials } from '@/utils/app/crypto';
+import { shouldUseHeaderAuth } from '@/utils/app/api-config';
+
 export const config = {
   runtime: 'edge',
   api: {
@@ -48,8 +50,7 @@ const handler = async (req: Request): Promise<Response> => {
     if(chatCompletionURL.includes('generate')) {
       if (messages?.length > 0 && messages[messages.length - 1]?.role === 'user') {
         payload = {
-          input_message: messages[messages.length - 1]?.content ?? '',
-          jira_credentials: decryptedJiraCredentials?.username && decryptedJiraCredentials?.token ? decryptedJiraCredentials : undefined
+          input_message: messages[messages.length - 1]?.content ?? ''
         };
       } else {
         throw new Error('User message not found: messages array is empty or invalid.');
@@ -68,19 +69,46 @@ const handler = async (req: Request): Promise<Response> => {
         top_k: 0,
         collection_name: "string",
         stop: true,
-        jira_credentials: decryptedJiraCredentials?.username && decryptedJiraCredentials?.token ? decryptedJiraCredentials : undefined,
         additionalProp1: {}
-      }
+      };
     }
 
     console.log('aiq - making request to', { url: chatCompletionURL });
+
+    // Check backend configuration to determine auth method
+    const useHeaderAuth = await shouldUseHeaderAuth();
+    console.log(`🔐 Using ${useHeaderAuth ? 'header' : 'body'} auth method for JIRA credentials`);
+
+    let authHeader = {};
+    let finalPayload: any = payload;
+
+    if (decryptedJiraCredentials?.username && decryptedJiraCredentials?.token) {
+      if (useHeaderAuth) {
+        // Send credentials via Authorization header
+        authHeader = { 
+          'Authorization': `Basic ${Buffer.from(`${decryptedJiraCredentials.username}:${decryptedJiraCredentials.token}`).toString('base64')}` 
+        };
+        console.log('🔐 JIRA credentials added to Authorization header');
+      } else {
+        // Send credentials in request body (existing behavior)
+        finalPayload = {
+          ...payload,
+          jira_credentials: {
+            username: decryptedJiraCredentials.username,
+            token: decryptedJiraCredentials.token
+          }
+        };
+        console.log('🔐 JIRA credentials added to request body');
+      }
+    }
 
     let response = await fetch(chatCompletionURL, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        ...authHeader
       },
-      body: JSON.stringify(payload),
+      body: JSON.stringify(finalPayload),
     });
 
     console.log('aiq - received response from server', response.status);

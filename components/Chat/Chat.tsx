@@ -22,6 +22,7 @@ import {
 } from '@/utils/app/helper';
 import { throttle } from '@/utils/data/throttle';
 import { getSecureJIRACredentials } from '@/utils/app/crypto';
+import { shouldUseHeaderAuth } from '@/utils/app/api-config';
 import { ChatBody, Conversation, Message } from '@/types/chat';
 import HomeContext from '@/pages/api/home/home.context';
 import { ChatInput } from './ChatInput';
@@ -55,12 +56,6 @@ const safeSessionStorage = {
 
 export const Chat = () => {
   const { t } = useTranslation('chat');
-  
-  // Debug: Test event system
-  const testEventSystem = () => {
-    console.log('🧪 Testing event system manually');
-    window.dispatchEvent(new Event('websocket-settings-changed'));
-  };
   
   const {
     state: {
@@ -104,7 +99,7 @@ export const Chat = () => {
 
   // Add these variables near the top of your component
   const isUserInitiatedScroll = useRef(false);
-  const scrollTimeout = useRef(null);
+  const scrollTimeout = useRef<NodeJS.Timeout | null>(null);
 
 
   const openModal = (data : any = {}) => {
@@ -116,11 +111,16 @@ export const Chat = () => {
     // todo send user input to websocket server as user response to interaction message
     // console.log("User response:", userResponse);
     
+    // Check backend configuration to determine auth method
+    const useHeaderAuth = await shouldUseHeaderAuth();
+    console.log(`🔐 WebSocket interaction using ${useHeaderAuth ? 'header' : 'body'} auth method`);
+    
     // Get encrypted credentials data for WebSocket interaction
     const storedDataJSON = safeSessionStorage.getItem('jira-credentials');
     let jiraCredentialsForWS: any = undefined;
 
-    if (storedDataJSON) {
+    if (storedDataJSON && !useHeaderAuth) {
+      // Only include credentials in body if not using header auth
       try {
         const storedData = JSON.parse(storedDataJSON);
         // Check if credentials are expired before sending
@@ -167,6 +167,7 @@ export const Chat = () => {
         ]
       },
       jira_credentials: jiraCredentialsForWS,
+      auth_method: useHeaderAuth ? 'header' : 'body',
       timestamp: new Date().toISOString(),
     };
     console.log('sending user response for interaction message via websocket', wsMessage)
@@ -607,11 +608,16 @@ export const Chat = () => {
             })
           }
           
+          // Check backend configuration to determine auth method
+          const useHeaderAuth = await shouldUseHeaderAuth();
+          console.log(`🔐 WebSocket chat using ${useHeaderAuth ? 'header' : 'body'} auth method`);
+          
           // Get encrypted credentials data for WebSocket request
           const storedDataJSON = sessionStorage.getItem('jira-credentials');
           let jiraCredentialsForWS: any = undefined;
 
-          if (storedDataJSON) {
+          if (storedDataJSON && !useHeaderAuth) {
+            // Only include credentials in body if not using header auth
             try {
               const storedData = JSON.parse(storedDataJSON);
               // Check if credentials are expired before sending
@@ -648,6 +654,7 @@ export const Chat = () => {
               messages: chatMessages
             },
             jira_credentials: jiraCredentialsForWS,
+            auth_method: useHeaderAuth ? 'header' : 'body',
             timestamp: new Date().toISOString(),
           };
           // console.log('Sent message via websocket', wsMessage)
@@ -962,8 +969,7 @@ export const Chat = () => {
   // Add an effect to set up wheel and touchmove event listeners
   useEffect(() => {
     const container = chatContainerRef.current;
-    if (!container) return;
-
+    
     // Function to handle user input events (mouse wheel, touch)
     const handleUserInput = () => {
       // Mark this as user-initiated scrolling
@@ -978,19 +984,23 @@ export const Chat = () => {
       }, 200);
     };
 
-    // Add event listeners for user interactions
-    container.addEventListener('wheel', handleUserInput, { passive: true });
-    container.addEventListener('touchmove', handleUserInput, { passive: true });
+    // Only add event listeners if container exists
+    if (container) {
+      container.addEventListener('wheel', handleUserInput, { passive: true });
+      container.addEventListener('touchmove', handleUserInput, { passive: true });
+    }
     
     return () => {
-      // Clean up
-      container.removeEventListener('wheel', handleUserInput);
-      container.removeEventListener('touchmove', handleUserInput);
+      // Clean up - only remove listeners if container exists
+      if (container) {
+        container.removeEventListener('wheel', handleUserInput);
+        container.removeEventListener('touchmove', handleUserInput);
+      }
       if (scrollTimeout.current) {
         clearTimeout(scrollTimeout.current);
       }
     };
-  }, [chatContainerRef.current]); // Only re-run if the container ref changes
+  }, []); // Remove the problematic dependency
 
 // Now modify your handleScroll function to use this flag
   const handleScroll = useCallback(() => {
