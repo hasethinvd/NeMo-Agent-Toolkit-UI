@@ -970,7 +970,7 @@ export const Chat = () => {
   // Add an effect to set up wheel and touchmove event listeners
   useEffect(() => {
     const container = chatContainerRef.current;
-    
+
     // Function to handle user input events (mouse wheel, touch)
     const handleUserInput = () => {
       // Mark this as user-initiated scrolling
@@ -987,15 +987,15 @@ export const Chat = () => {
 
     // Only add event listeners if container exists
     if (container) {
-      container.addEventListener('wheel', handleUserInput, { passive: true });
-      container.addEventListener('touchmove', handleUserInput, { passive: true });
+    container.addEventListener('wheel', handleUserInput, { passive: true });
+    container.addEventListener('touchmove', handleUserInput, { passive: true });
     }
     
     return () => {
       // Clean up - only remove listeners if container exists
       if (container) {
-        container.removeEventListener('wheel', handleUserInput);
-        container.removeEventListener('touchmove', handleUserInput);
+      container.removeEventListener('wheel', handleUserInput);
+      container.removeEventListener('touchmove', handleUserInput);
       }
       if (scrollTimeout.current) {
         clearTimeout(scrollTimeout.current);

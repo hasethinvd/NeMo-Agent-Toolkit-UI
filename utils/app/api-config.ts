@@ -21,7 +21,7 @@ export function getApiBaseUrl(): string {
 export function getApiUrl(endpoint: string): string {
   const baseUrl = getApiBaseUrl();
   return `${baseUrl}${endpoint.startsWith('/') ? '' : '/'}${endpoint}`;
-}
+} 
 
 // Cache for backend config to avoid repeated requests
 let backendConfigCache: { auth_method: string; description: string } | null = null;

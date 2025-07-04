@@ -12,20 +12,20 @@ export const JiraStatus: FC<Props> = ({ className = '' }) => {
   const [uiCredentials, setUiCredentials] = useState<JIRACredentials | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const updateStatus = async () => {
+    const updateStatus = async () => {
     setLoading(true);
     
     // Check UI credentials only
-    const currentStatus = getJIRACredentialStatus();
-    if (currentStatus) {
-      const creds = await getSecureJIRACredentials();
+      const currentStatus = getJIRACredentialStatus();
+      if (currentStatus) {
+        const creds = await getSecureJIRACredentials();
       setUiCredentials(creds);
-    } else {
+      } else {
       setUiCredentials(null);
-    }
+      }
     
     setLoading(false);
-  };
+    };
 
   useEffect(() => {
     updateStatus();
@@ -69,7 +69,7 @@ export const JiraStatus: FC<Props> = ({ className = '' }) => {
         }`} />
         <span className="text-sm text-gray-600 dark:text-gray-300 font-medium">
           {status.message}
-        </span>
+      </span>
       </div>
     </div>
   );

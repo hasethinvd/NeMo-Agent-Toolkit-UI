@@ -23,7 +23,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     
     let headers: any = {
       'Content-Type': 'application/json',
-      'Accept': 'application/json',
+        'Accept': 'application/json',
     };
     
     let body: any = {};

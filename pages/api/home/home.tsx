@@ -62,7 +62,7 @@ const Home = (props: any) => {
     initialState,
   });
 
-  let workflow =  'AIQ TPM';
+  let workflow =  'NAT Toolkit';
 
   const {
     state: {
