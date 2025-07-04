@@ -3,6 +3,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useMemo,
   useRef,
   useState,
 } from 'react';
@@ -1000,11 +1001,13 @@ export const Chat = () => {
         clearTimeout(scrollTimeout.current);
       }
     };
-  }, []); // Remove the problematic dependency
+  }, []);
 
 // Now modify your handleScroll function to use this flag
   const handleScroll = useCallback(() => {
-    if (!chatContainerRef.current || !isUserInitiatedScroll.current) return;
+    if (!chatContainerRef.current || !isUserInitiatedScroll.current) {
+      return;
+    }
     
     const { scrollTop, scrollHeight, clientHeight } = chatContainerRef.current;
     const isScrollingUp = scrollTop < lastScrollTop.current;
@@ -1037,13 +1040,13 @@ export const Chat = () => {
     homeDispatch({ field: 'autoScroll', value: true });
   };
 
-  const scrollDown = () => {
+  const scrollDown = useCallback(() => {
     if (autoScrollEnabled) {
       messagesEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
     }
-  }
+  }, [autoScrollEnabled]);
 
-  const throttledScrollDown = throttle(scrollDown, 250);
+  const throttledScrollDown = useMemo(() => throttle(scrollDown, 250), [scrollDown]);
 
   useEffect(() => {
     throttledScrollDown();
