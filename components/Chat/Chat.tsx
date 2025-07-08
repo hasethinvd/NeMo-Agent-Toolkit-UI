@@ -746,7 +746,11 @@ export const Chat = () => {
             toast.error('Error: No data received from server');
             return;
           }
-          if (!false) {
+          // Check if response is streamable (has a readable stream)
+          const isStreamable = data && typeof data.getReader === 'function';
+          console.log('aiq - response streamable:', isStreamable);
+          
+          if (isStreamable) {
             if (updatedConversation.messages.length === 1) {
               const { content } = message;
               const customName =
@@ -898,38 +902,49 @@ export const Chat = () => {
               homeDispatch({ field: 'loading', value: false });
             }, 200);
           } else {
-            const { answer } = await response?.json();
-            const updatedMessages: Message[] = [
-              ...updatedConversation.messages,
-              { role: 'assistant', content: answer },
-            ];
-            updatedConversation = {
-              ...updatedConversation,
-              messages: updatedMessages,
-            };
-            homeDispatch({
-              field: 'selectedConversation',
-              value: updateConversation,
-            });
-            saveConversation(updatedConversation);
-            const updatedConversations: Conversation[] = conversations.map(
-              (conversation) => {
-                if (conversation.id === selectedConversation.id) {
-                  return updatedConversation;
-                }
-                return conversation;
-              },
-            );
-            if (updatedConversations.length === 0) {
-              updatedConversations.push(updatedConversation);
+            // Handle non-streaming response
+            console.log('aiq - handling non-streaming response');
+            try {
+              const responseText = await response.text();
+              console.log('aiq - non-streaming response text length:', responseText.length);
+              
+              const updatedMessages: Message[] = [
+                ...updatedConversation.messages,
+                { role: 'assistant', content: responseText },
+              ];
+              updatedConversation = {
+                ...updatedConversation,
+                messages: updatedMessages,
+              };
+              homeDispatch({
+                field: 'selectedConversation',
+                value: updatedConversation,
+              });
+              saveConversation(updatedConversation);
+              const updatedConversations: Conversation[] = conversations.map(
+                (conversation) => {
+                  if (conversation.id === selectedConversation.id) {
+                    return updatedConversation;
+                  }
+                  return conversation;
+                },
+              );
+              if (updatedConversations.length === 0) {
+                updatedConversations.push(updatedConversation);
+              }
+              homeDispatch({
+                field: 'conversations',
+                value: updatedConversations,
+              });
+              saveConversations(updatedConversations);
+              homeDispatch({ field: 'loading', value: false });
+              homeDispatch({ field: 'messageIsStreaming', value: false });
+            } catch (error) {
+              console.error('aiq - error processing non-streaming response:', error);
+              homeDispatch({ field: 'loading', value: false });
+              homeDispatch({ field: 'messageIsStreaming', value: false });
+              toast.error('Error processing response from server');
             }
-            homeDispatch({
-              field: 'conversations',
-              value: updatedConversations,
-            });
-            saveConversations(updatedConversations);
-            homeDispatch({ field: 'loading', value: false });
-            homeDispatch({ field: 'messageIsStreaming', value: false });
           }
         } catch (error) {
           saveConversation(updatedConversation);

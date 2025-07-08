@@ -117,6 +117,8 @@ export const SettingDialog: FC<Props> = ({ open, onClose }) => {
 
     updateCredentialStatus();
     
+
+    
     // Listen for credential changes
     const handleCredentialChange = () => {
       updateCredentialStatus();
@@ -491,6 +493,8 @@ export const SettingDialog: FC<Props> = ({ open, onClose }) => {
     }
   };
 
+
+
   const handleMfaVerification = async (isVerifyOnly: boolean) => {
     if (!mfaCode || mfaCode.length !== 6) {
       toast.error('Please enter a valid 6-digit code');
@@ -790,6 +794,8 @@ export const SettingDialog: FC<Props> = ({ open, onClose }) => {
                       Clear JIRA Settings
                     </button>
                   </div>
+
+
                 </div>
               </div>
             </div>
