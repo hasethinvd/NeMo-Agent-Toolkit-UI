@@ -201,6 +201,22 @@ const Home = (props: any) => {
       dispatch({ field: 'showChatbar', value: showChatbar === 'true' });
     }
 
+    // Load URL settings from sessionStorage
+    const storedChatURL = safeSessionStorage.getItem('chatCompletionURL');
+    if (storedChatURL) {
+      dispatch({ field: 'chatCompletionURL', value: storedChatURL });
+    }
+
+    const storedWebSocketURL = safeSessionStorage.getItem('webSocketURL');
+    if (storedWebSocketURL) {
+      dispatch({ field: 'webSocketURL', value: storedWebSocketURL });
+    }
+
+    const storedWebSocketSchema = safeSessionStorage.getItem('webSocketSchema');
+    if (storedWebSocketSchema) {
+      dispatch({ field: 'webSocketSchema', value: storedWebSocketSchema });
+    }
+
     const folders = safeSessionStorage.getItem('folders');
     if (folders) {
       dispatch({ field: 'folders', value: JSON.parse(folders) });
