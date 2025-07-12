@@ -85,57 +85,65 @@ export const SettingDialog: FC<Props> = ({ open, onClose }) => {
     }
   }, []);
 
+  // Load JIRA credentials and MFA status on component mount
   useEffect(() => {
-    const updateCredentialStatus = async () => {
-      const status = getJIRACredentialStatus();
-      const hasJiraCredentials = !!status?.fingerprint;
-      
-      // Get JIRA username for MFA user ID
-      let userId = 'aiq-tpm-system';
+    const loadCredentials = async () => {
       try {
-        const credentials = await getSecureJIRACredentials();
-        if (credentials?.username) {
-          userId = credentials.username;
+        // Check if credentials exist
+        const status = getJIRACredentialStatus();
+        const hasJiraCredentials = !!status?.fingerprint;
+        setHasCredentials(hasJiraCredentials);
+        
+        // Get actual credentials if they exist
+        let userId = 'aiq-tpm-system';
+        if (hasJiraCredentials) {
+          try {
+            const credentials = await getSecureJIRACredentials();
+            if (credentials?.username) {
+              setJiraUsernameValue(credentials.username);
+              setJiraTokenValue(credentials.token);
+              userId = credentials.username;
+            }
+          } catch (error) {
+            console.log('Could not get JIRA credentials:', error);
+          }
+        }
+        
+        // Check MFA status using sessionStorage backend URL
+        // Get backend URL from sessionStorage or fallback to default
+        const storedChatURL = safeSessionStorage.getItem('chatCompletionURL');
+        let backendUrl = 'https://127.0.0.1:8080'; // default
+        
+        if (storedChatURL) {
+          // Extract base URL from stored chat completion URL
+          const url = new URL(storedChatURL);
+          backendUrl = `${url.protocol}//${url.host}`;
+        }
+        
+        try {
+          const mfaResponse = await fetch(`${backendUrl}/api/mfa/status?user_id=${userId}`, {
+            method: 'GET',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+          });
+          
+          if (mfaResponse.ok) {
+            const mfaData = await mfaResponse.json();
+            setHasMFA(mfaData.enabled);
+          }
+        } catch (mfaError) {
+          console.log('MFA status check failed (this is normal if backend is not running):', mfaError);
+          setHasMFA(false);
         }
       } catch (error) {
-        console.log('Could not get JIRA username for MFA check:', error);
+        console.error('Error loading credentials:', error);
       }
-      
-      // Check MFA status with correct user ID
-      let mfaEnabled = false;
-      try {
-        const mfaResponse = await fetch(`/api/mfa/status?user_id=${userId}`);
-        const mfaStatus = await mfaResponse.json();
-        mfaEnabled = mfaStatus.enabled;
-      } catch (error) {
-        console.log('Could not check MFA status:', error);
-      }
-      
-      setHasCredentials(hasJiraCredentials);
-      setHasMFA(mfaEnabled);
-    };
-
-    updateCredentialStatus();
-    
-
-    
-    // Listen for credential changes
-    const handleCredentialChange = () => {
-      updateCredentialStatus();
     };
     
-    // Listen for MFA status changes
-    const handleMFAChange = () => {
-      updateCredentialStatus();
-    };
-    
-    window.addEventListener('jira-credentials-changed', handleCredentialChange);
-    window.addEventListener('mfa-status-changed', handleMFAChange);
-    
-    return () => {
-      window.removeEventListener('jira-credentials-changed', handleCredentialChange);
-      window.removeEventListener('mfa-status-changed', handleMFAChange);
-    };
+    if (open) {
+      loadCredentials();
+    }
   }, [open]);
 
   useEffect(() => {
@@ -192,9 +200,25 @@ export const SettingDialog: FC<Props> = ({ open, onClose }) => {
     if (jiraUsernameValue && jiraTokenValue) {
       console.log('🔐 JIRA credentials detected, starting MFA flow for user:', jiraUsernameValue);
       try {
-        // Check if MFA is already set up for this user
+        // Check if MFA is already set up for this user using sessionStorage backend URL
         console.log('🔍 Checking MFA status for user:', jiraUsernameValue);
-        const mfaResponse = await fetch(`/api/mfa/status?user_id=${jiraUsernameValue}`);
+        
+        // Get backend URL from sessionStorage or fallback to default
+        const storedChatURL = safeSessionStorage.getItem('chatCompletionURL');
+        let backendUrl = 'https://127.0.0.1:8080'; // default
+        
+        if (storedChatURL) {
+          // Extract base URL from stored chat completion URL
+          const url = new URL(storedChatURL);
+          backendUrl = `${url.protocol}//${url.host}`;
+        }
+        
+        const mfaResponse = await fetch(`${backendUrl}/api/mfa/status?user_id=${jiraUsernameValue}`, {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        });
         console.log('🔍 MFA status response:', mfaResponse.status, mfaResponse.ok);
         
         if (!mfaResponse.ok) {

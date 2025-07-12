@@ -15,7 +15,7 @@ export const setupSecurityHeaders = () => {
     script-src 'self' 'unsafe-inline' 'unsafe-eval';
     style-src 'self' 'unsafe-inline';
     img-src 'self' data: https:;
-    connect-src 'self' https://jirasw.nvidia.com wss: ws:;
+    connect-src 'self' https://jirasw.nvidia.com https://127.0.0.1:* http://127.0.0.1:* https://localhost:* http://localhost:* wss: ws:;
     frame-ancestors 'none';
     base-uri 'self';
     form-action 'self';
