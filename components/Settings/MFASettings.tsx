@@ -73,7 +73,10 @@ export const MFASettings: FC<Props> = ({ className = '' }) => {
     }
     
     try {
-      const response = await fetch('/api/mfa/status?user_id=' + userId);
+      const backendUrl = sessionStorage.getItem('backendUrl') || 
+                     `${process.env.NEXT_PUBLIC_API_PROTOCOL || 'https'}://${process.env.NEXT_PUBLIC_API_HOST || '127.0.0.1'}:${process.env.NEXT_PUBLIC_API_PORT || '8080'}`;
+    
+    const response = await fetch(`${backendUrl}/api/mfa/status?user_id=${userId}`);
       if (response.ok) {
         const data = await response.json();
         
@@ -128,13 +131,19 @@ export const MFASettings: FC<Props> = ({ className = '' }) => {
     try {
       console.log('🔐 Starting MFA setup...');
       
-      const response = await fetch('/api/mfa', {
+      const backendUrl = sessionStorage.getItem('backendUrl') || 
+                       `${process.env.NEXT_PUBLIC_API_PROTOCOL || 'https'}://${process.env.NEXT_PUBLIC_API_HOST || '127.0.0.1'}:${process.env.NEXT_PUBLIC_API_PORT || '8080'}`;
+      
+      const response = await fetch(`${backendUrl}/api/mfa/setup`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-user-id': userId,
-          'x-user-email': userEmail,
         },
+        body: JSON.stringify({
+          user_id: userId,
+          user_email: userEmail,
+          force_new: false
+        }),
       });
 
       console.log('🔐 MFA setup response status:', response.status);
@@ -192,13 +201,16 @@ export const MFASettings: FC<Props> = ({ className = '' }) => {
 
     setIsVerifying(true);
     try {
-      const response = await fetch('/api/mfa', {
-        method: 'PUT',
+      const backendUrl = sessionStorage.getItem('backendUrl') || 
+                       `${process.env.NEXT_PUBLIC_API_PROTOCOL || 'https'}://${process.env.NEXT_PUBLIC_API_HOST || '127.0.0.1'}:${process.env.NEXT_PUBLIC_API_PORT || '8080'}`;
+      
+      const response = await fetch(`${backendUrl}/api/mfa/verify`, {
+        method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-user-id': userId,
         },
         body: JSON.stringify({
+          user_id: userId,
           code: verificationCode,
           is_backup_code: false,
         }),
@@ -246,13 +258,16 @@ export const MFASettings: FC<Props> = ({ className = '' }) => {
 
     setIsVerifying(true);
     try {
-      const response = await fetch('/api/mfa', {
-        method: 'PUT',
+      const backendUrl = sessionStorage.getItem('backendUrl') || 
+                       `${process.env.NEXT_PUBLIC_API_PROTOCOL || 'https'}://${process.env.NEXT_PUBLIC_API_HOST || '127.0.0.1'}:${process.env.NEXT_PUBLIC_API_PORT || '8080'}`;
+      
+      const response = await fetch(`${backendUrl}/api/mfa/verify`, {
+        method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-user-id': userId,
         },
         body: JSON.stringify({
+          user_id: userId,
           code: quickVerifyCode,
           is_backup_code: false,
         }),

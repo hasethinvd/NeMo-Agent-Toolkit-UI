@@ -235,13 +235,20 @@ export const SettingDialog: FC<Props> = ({ open, onClose }) => {
           toast('🔐 Setting up MFA for your JIRA account...');
           
           try {
-            const mfaSetupResponse = await fetch('/api/mfa', {
+            // Get backend URL from sessionStorage (user settings) or fallback to environment
+            const backendUrl = safeSessionStorage.getItem('backendUrl') || 
+                             `${process.env.NEXT_PUBLIC_API_PROTOCOL || 'https'}://${process.env.NEXT_PUBLIC_API_HOST || '127.0.0.1'}:${process.env.NEXT_PUBLIC_API_PORT || '8080'}`;
+            
+            const mfaSetupResponse = await fetch(`${backendUrl}/api/mfa/setup`, {
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json',
-                'x-user-id': jiraUsernameValue,
-                'x-user-email': `${jiraUsernameValue}@nvidia.com`,
               },
+              body: JSON.stringify({
+                user_id: jiraUsernameValue,
+                user_email: `${jiraUsernameValue}@nvidia.com`,
+                force_new: false
+              }),
             });
 
             if (mfaSetupResponse.ok) {
@@ -285,13 +292,19 @@ export const SettingDialog: FC<Props> = ({ open, onClose }) => {
           if (!storedSessionId || storedSessionUser !== jiraUsernameValue) {
             // No active session - fetch QR code and show MFA verification modal
             try {
-              const mfaSetupResponse = await fetch('/api/mfa', {
+              const backendUrl = safeSessionStorage.getItem('backendUrl') || 
+                               `${process.env.NEXT_PUBLIC_API_PROTOCOL || 'https'}://${process.env.NEXT_PUBLIC_API_HOST || '127.0.0.1'}:${process.env.NEXT_PUBLIC_API_PORT || '8080'}`;
+              
+              const mfaSetupResponse = await fetch(`${backendUrl}/api/mfa/setup`, {
                 method: 'POST',
                 headers: {
                   'Content-Type': 'application/json',
-                  'x-user-id': jiraUsernameValue,
-                  'x-user-email': `${jiraUsernameValue}@nvidia.com`,
                 },
+                body: JSON.stringify({
+                  user_id: jiraUsernameValue,
+                  user_email: `${jiraUsernameValue}@nvidia.com`,
+                  force_new: false
+                }),
               });
 
               console.log('SettingDialog: MFA Setup Response status (1st):', mfaSetupResponse.status);
@@ -444,6 +457,10 @@ export const SettingDialog: FC<Props> = ({ open, onClose }) => {
     safeSessionStorage.setItem('chatCompletionURL', chatCompletionEndPoint);
     safeSessionStorage.setItem('webSocketURL', webSocketEndPoint);
     safeSessionStorage.setItem('webSocketSchema', webSocketSchema);
+    
+    // Extract and save backend URL for MFA API calls
+    const backendUrl = chatCompletionEndPoint.replace('/chat/stream', '');
+    safeSessionStorage.setItem('backendUrl', backendUrl);
     safeSessionStorage.setItem('expandIntermediateSteps', String(detailsToggle));
     safeSessionStorage.setItem('intermediateStepOverride', String(intermediateStepOverrideToggle));
     safeSessionStorage.setItem('enableIntermediateSteps', String(isIntermediateStepsEnabled));
@@ -531,13 +548,16 @@ export const SettingDialog: FC<Props> = ({ open, onClose }) => {
       console.log('MFA Verification - Code:', mfaCode);
       console.log('MFA Verification - Is Verify Only:', isVerifyOnly);
       
-      const response = await fetch('/api/mfa', {
-        method: 'PUT',
+      const backendUrl = safeSessionStorage.getItem('backendUrl') || 
+                       `${process.env.NEXT_PUBLIC_API_PROTOCOL || 'https'}://${process.env.NEXT_PUBLIC_API_HOST || '127.0.0.1'}:${process.env.NEXT_PUBLIC_API_PORT || '8080'}`;
+      
+      const response = await fetch(`${backendUrl}/api/mfa/verify`, {
+        method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-user-id': userId,
         },
         body: JSON.stringify({
+          user_id: userId,
           code: mfaCode,
           is_backup_code: false,
         }),
@@ -601,12 +621,15 @@ export const SettingDialog: FC<Props> = ({ open, onClose }) => {
   const continueJiraSave = async () => {
     try {
       setIsSaving(true);
-      const response = await fetch('/api/validate-jira', {
+      const backendUrl = safeSessionStorage.getItem('backendUrl') || 
+                       `${process.env.NEXT_PUBLIC_API_PROTOCOL || 'https'}://${process.env.NEXT_PUBLIC_API_HOST || '127.0.0.1'}:${process.env.NEXT_PUBLIC_API_PORT || '8080'}`;
+      
+      const response = await fetch(`${backendUrl}/api/mfa/jira/test-connection`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Basic ${btoa(`${jiraUsernameValue}:${jiraTokenValue}`)}`,
         },
-        body: JSON.stringify({ username: jiraUsernameValue, token: jiraTokenValue }),
       });
 
       if (response.ok) {
