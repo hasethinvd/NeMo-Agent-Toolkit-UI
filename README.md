@@ -139,7 +139,7 @@ Override defaults only if needed:
 ```bash
 # API Configuration (npm scripts set these automatically)
 NEXT_PUBLIC_API_PROTOCOL=https          # Default: 'https'
-NEXT_PUBLIC_API_HOST=127.0.0.1          # Default: 'localhost'  
+NEXT_PUBLIC_API_HOST=0.0.0.0          # Default: 'localhost'  
 NEXT_PUBLIC_API_PORT=8080              # Default: '8080'
 
 # Advanced Configuration (handled by npm scripts)
@@ -159,7 +159,7 @@ general:
     ssl_ca_file: "../certs/ca.crt"
     ssl_auto_generate: true
     cors:
-      allow_origins: ["https://localhost:3000", "https://127.0.0.1:3000"]
+      allow_origins: ["https://localhost:3000", "https://0.0.0.0:3000"]
       allow_credentials: true
 ```
 
