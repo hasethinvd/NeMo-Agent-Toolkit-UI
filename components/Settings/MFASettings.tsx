@@ -1,6 +1,7 @@
 import { FC, useState, useEffect } from 'react';
 import toast from 'react-hot-toast';
 import { getJIRACredentialStatus, getSecureJIRACredentials } from '../../utils/app/crypto';
+import { getBackendUrl } from '../../utils/app/api-config';
 
 interface MFAStatus {
   enabled: boolean;
@@ -73,8 +74,8 @@ export const MFASettings: FC<Props> = ({ className = '' }) => {
     }
     
     try {
-      const backendUrl = sessionStorage.getItem('backendUrl') || 
-                     `${process.env.NEXT_PUBLIC_API_PROTOCOL || 'https'}://${process.env.NEXT_PUBLIC_API_HOST || '127.0.0.1'}:${process.env.NEXT_PUBLIC_API_PORT || '8080'}`;
+      // Use consistent backend URL that prioritizes UI settings over environment variables
+      const backendUrl = getBackendUrl();
     
     const response = await fetch(`${backendUrl}/api/mfa/status?user_id=${userId}`);
       if (response.ok) {
@@ -131,8 +132,8 @@ export const MFASettings: FC<Props> = ({ className = '' }) => {
     try {
       console.log('🔐 Starting MFA setup...');
       
-      const backendUrl = sessionStorage.getItem('backendUrl') || 
-                       `${process.env.NEXT_PUBLIC_API_PROTOCOL || 'https'}://${process.env.NEXT_PUBLIC_API_HOST || '127.0.0.1'}:${process.env.NEXT_PUBLIC_API_PORT || '8080'}`;
+      // Use consistent backend URL that prioritizes UI settings over environment variables
+      const backendUrl = getBackendUrl();
       
       const response = await fetch(`${backendUrl}/api/mfa/setup`, {
         method: 'POST',
@@ -201,8 +202,8 @@ export const MFASettings: FC<Props> = ({ className = '' }) => {
 
     setIsVerifying(true);
     try {
-      const backendUrl = sessionStorage.getItem('backendUrl') || 
-                       `${process.env.NEXT_PUBLIC_API_PROTOCOL || 'https'}://${process.env.NEXT_PUBLIC_API_HOST || '127.0.0.1'}:${process.env.NEXT_PUBLIC_API_PORT || '8080'}`;
+      // Use consistent backend URL that prioritizes UI settings over environment variables
+      const backendUrl = getBackendUrl();
       
       const response = await fetch(`${backendUrl}/api/mfa/verify`, {
         method: 'POST',
@@ -258,8 +259,8 @@ export const MFASettings: FC<Props> = ({ className = '' }) => {
 
     setIsVerifying(true);
     try {
-      const backendUrl = sessionStorage.getItem('backendUrl') || 
-                       `${process.env.NEXT_PUBLIC_API_PROTOCOL || 'https'}://${process.env.NEXT_PUBLIC_API_HOST || '127.0.0.1'}:${process.env.NEXT_PUBLIC_API_PORT || '8080'}`;
+      // Use consistent backend URL that prioritizes UI settings over environment variables
+      const backendUrl = getBackendUrl();
       
       const response = await fetch(`${backendUrl}/api/mfa/verify`, {
         method: 'POST',

@@ -6,7 +6,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const { username, token } = req.body;
+  const { username, token, backend_url } = req.body;
 
   if (!username || !token) {
     return res.status(400).json({ error: 'Username and token are required' });
@@ -17,13 +17,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const useHeaderAuth = await shouldUseHeaderAuth();
     console.log(`🔐 JIRA validation using ${useHeaderAuth ? 'header' : 'body'} auth method`);
     
-    // Test by sending credentials to the actual backend server
-    // Use MFA router endpoint which properly handles both auth methods
-    const backendUrl = getApiUrl('/api/mfa/jira/test-connection');
+    // Use provided backend URL or fall back to configuration
+    let backendUrl: string;
+    if (backend_url) {
+      backendUrl = `${backend_url}/api/mfa/jira/test-connection`;
+      console.log(`🔗 Using provided backend URL: ${backend_url}`);
+    } else {
+      backendUrl = getApiUrl('/api/mfa/jira/test-connection');
+      console.log(`🔗 Using configured backend URL: ${backendUrl}`);
+    }
     
     let headers: any = {
       'Content-Type': 'application/json',
-        'Accept': 'application/json',
+      'Accept': 'application/json',
     };
     
     let body: any = {};
