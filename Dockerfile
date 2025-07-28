@@ -1,4 +1,7 @@
-FROM node:18-alpine AS base
+FROM node:20.19.4-alpine AS base
+
+# Update npm to latest version to fix cross-spawn vulnerability (GHSA-3xgq-45jj-v275)
+RUN npm install -g npm@latest
 
 # Install dependencies only when needed
 FROM base AS deps
@@ -22,18 +25,6 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
-RUN apk update
-
-# Set working directory
-WORKDIR /app
-# install node modules
-COPY package.json /app/package.json
-RUN npm install
-# Copy all files from current directory to working dir in image
-COPY . .
-# Build the assets
-RUN yarn build
-
 # Next.js collects completely anonymous telemetry data about general usage.
 # Learn more here: https://nextjs.org/telemetry
 # Uncomment the following line in case you want to disable telemetry during the build.
@@ -45,7 +36,7 @@ RUN npm run build
 FROM base AS runner
 WORKDIR /app
 
-ENV NODE_ENV production
+ENV NODE_ENV=production
 # Uncomment the following line in case you want to disable telemetry during runtime.
 # ENV NEXT_TELEMETRY_DISABLED 1
 
@@ -70,9 +61,9 @@ USER nextjs
 
 EXPOSE 3000
 
-ENV PORT 3000
+ENV PORT=3000
 # set hostname to localhost
-ENV HOSTNAME "0.0.0.0"
+ENV HOSTNAME="0.0.0.0"
 
 # server.js is created by next build from the standalone output
 # https://nextjs.org/docs/pages/api-reference/next-config-js/output
