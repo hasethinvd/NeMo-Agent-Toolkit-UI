@@ -248,7 +248,6 @@ export const SettingDialog: FC<Props> = ({ open, onClose }) => {
           });
           
           console.log('🔐 Setting MFA setup data with QR code length:', qrCodeData.length);
-          console.log('🔐 Is existing account:', data.is_existing);
           setShowMfaSetup(true);
           setCurrentStep(''); // Clear step indicator when modal is shown
           return true; // Success - waiting for user input, not failure
@@ -541,7 +540,9 @@ export const SettingDialog: FC<Props> = ({ open, onClose }) => {
         if (!shouldProceed) {
           // Only show warning if validation actually failed
           console.log('🔧 JIRA validation failed, but basic settings were saved');
-          toast('⚠️ Basic settings saved, but JIRA credentials need attention');
+          toast('Basic settings saved', {
+              icon: '⚙️',
+            });
           return;
         }
         // If shouldProceed is true, either JIRA is complete OR MFA modal is waiting
@@ -710,36 +711,16 @@ export const SettingDialog: FC<Props> = ({ open, onClose }) => {
           }
         } else {
           setCurrentStep('');
-          const errorMsg = data.error || 'Invalid MFA code. Please try again.';
-          console.log('🔐 MFA verification failed:', errorMsg);
-          
-          // Check if this is an existing account with invalid code
-          if (mfaSetupData?.is_existing && errorMsg.toLowerCase().includes('invalid')) {
-            // Show option to reset MFA
-            const resetConfirm = confirm(
-              '❌ MFA code is invalid. You have an existing MFA setup that conflicts with your authenticator app.\n\n' +
-              '🔧 SOLUTION:\n' +
-              '1. DELETE the "TPM AI Assistant" account from your authenticator app\n' +
-              '2. Click "OK" below to generate a fresh QR code\n' +
-              '3. Scan the new QR code to add it back\n\n' +
-              'This will completely reset your MFA setup.\n\n' +
-              'Click "OK" to reset MFA, or "Cancel" to try again with current setup.'
-            );
-            
-            if (resetConfirm) {
-              console.log('🔐 User chose to reset MFA setup');
-              setShowMfaSetup(false);
-              setMfaCode('');
-              // Force new setup
-              const resetSuccess = await handleMfaFlow(true);
-              if (resetSuccess) {
-                toast.success('🔐 MFA reset! Delete old account from your app, then scan this new QR code.');
-              }
-              return;
-            }
-          }
-          
-          toast.error(`❌ ${errorMsg}`);
+          const backendError = data.error || 'Invalid MFA code';
+          console.log('🔐 MFA verification failed:', backendError);
+          toast.custom((t) => (
+            <div className={`bg-white border border-red-200 px-4 py-3 rounded-lg shadow-md max-w-md text-center ${t.visible ? 'animate-fade-in' : 'animate-fade-out'}`}>
+              <div className="text-red-600 font-medium">{backendError}. Please try again.</div>
+              <div className="text-gray-500 text-sm mt-1">If issues persist: Delete "TPM AI Assistant" from your authenticator app and scan the QR code again.</div>
+            </div>
+          ), {
+            duration: 4000,
+          });
           setMfaCode('');
         }
       } else {
@@ -781,6 +762,8 @@ export const SettingDialog: FC<Props> = ({ open, onClose }) => {
       setTimeout(() => setCurrentStep(''), 500);
     }
   };
+
+
 
   const continueJiraSave = async () => {
     if (isSaving) {
