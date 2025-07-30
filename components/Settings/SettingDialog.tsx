@@ -207,7 +207,7 @@ export const SettingDialog: FC<Props> = ({ open, onClose }) => {
   };
 
   // Handle MFA flow after JIRA validation
-  const handleMfaFlow = async (): Promise<boolean> => {
+  const handleMfaFlow = async (forceNew: boolean = false): Promise<boolean> => {
     try {
       setCurrentStep('Setting up MFA...');
       
@@ -221,7 +221,7 @@ export const SettingDialog: FC<Props> = ({ open, onClose }) => {
         body: JSON.stringify({
           user_id: jiraUsernameValue,
           user_email: `${jiraUsernameValue}@nvidia.com`,
-          force_new: false
+          force_new: forceNew
         }),
       });
 
@@ -248,6 +248,7 @@ export const SettingDialog: FC<Props> = ({ open, onClose }) => {
           });
           
           console.log('🔐 Setting MFA setup data with QR code length:', qrCodeData.length);
+          console.log('🔐 Is existing account:', data.is_existing);
           setShowMfaSetup(true);
           setCurrentStep(''); // Clear step indicator when modal is shown
           return true; // Success - waiting for user input, not failure
@@ -672,15 +673,14 @@ export const SettingDialog: FC<Props> = ({ open, onClose }) => {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 second timeout
 
-      // Use the same API endpoint format as setup
+      // Use the exact format expected by backend: user_id, code, is_backup_code
       const response = await fetch(`${targetBackendUrl}/api/mfa/verify`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           user_id: userId,
-          user_email: `${userId}@nvidia.com`,
           code: mfaCode.trim(),
-          is_setup: !isVerifyOnly
+          is_backup_code: false
         }),
         signal: controller.signal
       });
@@ -692,7 +692,7 @@ export const SettingDialog: FC<Props> = ({ open, onClose }) => {
         const data = await response.json();
         console.log('🔐 MFA verification response data:', data);
         
-        if (data.verified || data.success) {
+        if (data.success) {
           setCurrentStep('MFA verified - Saving JIRA credentials...');
           toast.success('MFA verification successful!');
           
@@ -711,6 +711,34 @@ export const SettingDialog: FC<Props> = ({ open, onClose }) => {
         } else {
           setCurrentStep('');
           const errorMsg = data.error || 'Invalid MFA code. Please try again.';
+          console.log('🔐 MFA verification failed:', errorMsg);
+          
+          // Check if this is an existing account with invalid code
+          if (mfaSetupData?.is_existing && errorMsg.toLowerCase().includes('invalid')) {
+            // Show option to reset MFA
+            const resetConfirm = confirm(
+              '❌ MFA code is invalid. You have an existing MFA setup that conflicts with your authenticator app.\n\n' +
+              '🔧 SOLUTION:\n' +
+              '1. DELETE the "TPM AI Assistant" account from your authenticator app\n' +
+              '2. Click "OK" below to generate a fresh QR code\n' +
+              '3. Scan the new QR code to add it back\n\n' +
+              'This will completely reset your MFA setup.\n\n' +
+              'Click "OK" to reset MFA, or "Cancel" to try again with current setup.'
+            );
+            
+            if (resetConfirm) {
+              console.log('🔐 User chose to reset MFA setup');
+              setShowMfaSetup(false);
+              setMfaCode('');
+              // Force new setup
+              const resetSuccess = await handleMfaFlow(true);
+              if (resetSuccess) {
+                toast.success('🔐 MFA reset! Delete old account from your app, then scan this new QR code.');
+              }
+              return;
+            }
+          }
+          
           toast.error(`❌ ${errorMsg}`);
           setMfaCode('');
         }
