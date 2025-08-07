@@ -1,0 +1,45 @@
+version: '3.8'
+
+services:
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        # Build-time environment variables (can be overridden at runtime)
+        NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-}
+        NEXT_PUBLIC_API_PROTOCOL: ${NEXT_PUBLIC_API_PROTOCOL:-https}
+        NEXT_PUBLIC_API_HOST: ${NEXT_PUBLIC_API_HOST:-localhost}
+        NEXT_PUBLIC_API_PORT: ${NEXT_PUBLIC_API_PORT:-8080}
+        NEXT_PUBLIC_HTTP_CHAT_COMPLETION_URL: ${NEXT_PUBLIC_HTTP_CHAT_COMPLETION_URL:-}
+        NEXT_PUBLIC_WS_CHAT_COMPLETION_URL: ${NEXT_PUBLIC_WS_CHAT_COMPLETION_URL:-}
+        NEXT_PUBLIC_WEB_SOCKET_DEFAULT_ON: ${NEXT_PUBLIC_WEB_SOCKET_DEFAULT_ON:-true}
+        NEXT_PUBLIC_DOCS_URL: ${NEXT_PUBLIC_DOCS_URL:-}
+    container_name: tpm-frontend
+    ports:
+      - "3000:3000"
+    environment:
+      # Runtime environment variables (configurable per deployment)
+      - NEXT_PUBLIC_API_BASE_URL=${NEXT_PUBLIC_API_BASE_URL:-}
+      - NEXT_PUBLIC_API_HOST=${NEXT_PUBLIC_API_HOST:-localhost}
+      - NEXT_PUBLIC_API_PROTOCOL=${NEXT_PUBLIC_API_PROTOCOL:-https}
+      - NEXT_PUBLIC_API_PORT=${NEXT_PUBLIC_API_PORT:-8080}
+      - NEXT_PUBLIC_HTTP_CHAT_COMPLETION_URL=${NEXT_PUBLIC_HTTP_CHAT_COMPLETION_URL:-}
+      - NEXT_PUBLIC_WS_CHAT_COMPLETION_URL=${NEXT_PUBLIC_WS_CHAT_COMPLETION_URL:-}
+      - NEXT_PUBLIC_WEB_SOCKET_DEFAULT_ON=${NEXT_PUBLIC_WEB_SOCKET_DEFAULT_ON:-true}
+      - NEXT_PUBLIC_DOCS_URL=${NEXT_PUBLIC_DOCS_URL:-}
+      # Disable SSL verification for development (allows self-signed certs)
+      - NODE_TLS_REJECT_UNAUTHORIZED=${NODE_TLS_REJECT_UNAUTHORIZED:-0}
+      # Server-side API communication (container-to-container communication in Docker)
+      - INTERNAL_API_HOST=${INTERNAL_API_HOST:-backend}
+      - INTERNAL_API_PROTOCOL=${INTERNAL_API_PROTOCOL:-https}
+      - INTERNAL_API_PORT=${INTERNAL_API_PORT:-8080}
+    networks:
+      - tpm-shared-network
+    hostname: tpm-frontend
+    restart: unless-stopped
+
+networks:
+  tpm-shared-network:
+    external: true
+    name: tpm-shared-network 

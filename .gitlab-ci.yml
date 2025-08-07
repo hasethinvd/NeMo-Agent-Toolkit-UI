@@ -1,0 +1,63 @@
+stages:
+  - build_and_push
+
+variables:
+  DOCKER_TLS_CERTDIR: "/certs"
+  # NVIDIA Artifactory registry configuration
+  ARTIFACTORY_REGISTRY: "artifactory.nvidia.com"
+  IMAGE_NAME: "artifactory.nvidia.com/it-continum/tpm-jira"
+
+# Build and push to NVIDIA Artifactory
+build_and_push:
+  stage: build_and_push
+  image: docker:latest
+  services:
+    - docker:dind
+
+  before_script:
+    # Login to NVIDIA Artifactory registry
+    - echo "Logging into NVIDIA Artifactory registry..."
+    - docker login -u $ARTIFACTORY_USERNAME -p $ARTIFACTORY_PASSWORD $ARTIFACTORY_REGISTRY
+
+
+  script:
+    # Build the Docker image with platform specification
+    - echo "Building Docker image for linux/amd64 platform..."
+    - echo "Building frontend with staging backend integration..."
+    - docker build --platform linux/amd64 -t $IMAGE_NAME:$CI_PIPELINE_ID .
+
+    # Push with pipeline ID tag
+    - echo "Pushing to Artifactory registry..."
+    - docker push $IMAGE_NAME:$CI_PIPELINE_ID
+
+    # Tag with branch name and push
+    - docker tag $IMAGE_NAME:$CI_PIPELINE_ID $IMAGE_NAME:$CI_COMMIT_REF_NAME
+    - docker push $IMAGE_NAME:$CI_COMMIT_REF_NAME
+
+    # Add version tag if on main/master branch
+    - |
+      if [[ "$CI_COMMIT_REF_NAME" == "main" || "$CI_COMMIT_REF_NAME" == "master" ]]; then
+        echo "Adding version tags for production release..."
+        VERSION=$(date +%Y%m%d)-${CI_COMMIT_SHORT_SHA}
+        docker tag $IMAGE_NAME:$CI_PIPELINE_ID $IMAGE_NAME:$VERSION
+        docker push $IMAGE_NAME:$VERSION
+        # Also tag as latest for production
+        docker tag $IMAGE_NAME:$CI_PIPELINE_ID $IMAGE_NAME:latest
+        docker push $IMAGE_NAME:latest
+      fi
+
+  # Run on specified branches
+  only:
+    refs:
+      - develop
+      - staging
+      - main
+
+  tags:    
+    - build  
+
+  # Add retry mechanism for network issues
+  retry: 2
+  
+  # Add timeout to prevent hanging builds
+  timeout: 1 hour 

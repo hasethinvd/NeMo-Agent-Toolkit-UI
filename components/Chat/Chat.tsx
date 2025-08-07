@@ -253,9 +253,38 @@ export const Chat = () => {
           homeDispatch({ field: "loading", value: false });
           homeDispatch({ field: "messageIsStreaming", value: false });
           toast.dismiss(websocketLoadingToastIdRef.current);
-          toast.error("WebSocket connection failed.", {
-            id: "websocketErrorToastId",
-          });
+          toast.error(
+            (t) => (
+              <div className="text-sm">
+                <div className="font-semibold mb-2">WebSocket connection failed</div>
+                <div className="mb-2">
+                  The backend may not be running or SSL certificates need to be accepted.
+                </div>
+                <div className="mb-2">
+                  <strong>Step 1:</strong> Open{' '}
+                  <a 
+                    href="https://localhost:8080/api/jira/config"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-blue-500 hover:text-blue-700 underline"
+                    onClick={() => toast.dismiss(t.id)}
+                  >
+                    https://localhost:8080/api/jira/config
+                  </a>
+                </div>
+                <div className="mb-1">
+                  <strong>Step 2:</strong> Click "Advanced" → "Proceed to localhost (unsafe)"
+                </div>
+                <div className="text-xs text-gray-600 mt-2">
+                  This accepts the self-signed SSL certificate for local development
+                </div>
+              </div>
+            ),
+            {
+              id: "websocketErrorToastId",
+              duration: 12000, // 12 seconds for longer message
+            }
+          );
           resolve(false);
         }
       };

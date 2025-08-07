@@ -5,16 +5,8 @@ export function getApiBaseUrl(): string {
     return process.env.NEXT_PUBLIC_API_BASE_URL;
   }
   
-  // Get port from environment or default to 8080
-  const port = process.env.NEXT_PUBLIC_API_PORT || '8080';
-  
-  // Get protocol from environment or default to https
-  const protocol = process.env.NEXT_PUBLIC_API_PROTOCOL || 'https';
-  
-  // Get host from environment or default to localhost
-  const host = process.env.NEXT_PUBLIC_API_HOST || 'localhost';
-  
-  return `${protocol}://${host}:${port}`;
+  // Default to staging backend - no more localhost!
+  return 'https://tpmjira-tpm-jira-aiq.stg.astra.nvidia.com';
 }
 
 // Get the full API URL for a specific endpoint

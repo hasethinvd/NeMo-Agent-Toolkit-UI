@@ -1,6 +1,7 @@
 import { ChatBody } from '@/types/chat';
 import { delay } from '@/utils/app/helper';
 import { decryptCredentials } from '@/utils/app/crypto';
+import { getApiUrl } from '@/utils/app/api-config';
 export const config = {
   runtime: 'edge',
   api: {
@@ -22,6 +23,20 @@ const handler = async (req: Request): Promise<Response> => {
       enableIntermediateSteps: true
     }
   } = (await req.json()) as ChatBody;
+
+  // Use proper API URL for server-side calls (handles internal vs external URLs)
+  console.log('🔍 Debug: Original chatCompletionURL:', chatCompletionURL);
+  console.log('🔍 Debug: Environment check - isServerSide:', typeof window === 'undefined');
+  console.log('🔍 Debug: INTERNAL_API_HOST:', process.env.INTERNAL_API_HOST);
+  
+  if (!chatCompletionURL) {
+    chatCompletionURL = getApiUrl('/chat/stream');
+    console.log('🔍 Debug: Using fallback URL:', chatCompletionURL);
+  } else {
+    // Override with internal URL for server-side calls
+    chatCompletionURL = getApiUrl('/chat/stream');
+    console.log('🔍 Debug: Overriding with internal URL:', chatCompletionURL);
+  }
 
   try {    
     let payload;
