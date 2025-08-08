@@ -2,11 +2,12 @@ import { ChatBody } from '@/types/chat';
 import { delay } from '@/utils/app/helper';
 import { decryptCredentials } from '@/utils/app/crypto';
 import { getApiUrl } from '@/utils/app/api-config';
+
 export const config = {
   runtime: 'edge',
   api: {
     bodyParser: {
-      sizeLimit: '5mb',
+      sizeLimit: '10mb', // Increased for large JIRA responses
     },
   },
 };
@@ -63,8 +64,7 @@ const handler = async (req: Request): Promise<Response> => {
     if(chatCompletionURL.includes('generate')) {
       if (messages?.length > 0 && messages[messages.length - 1]?.role === 'user') {
         payload = {
-          input_message: messages[messages.length - 1]?.content ?? '',
-          jira_credentials: decryptedJiraCredentials?.username && decryptedJiraCredentials?.token ? decryptedJiraCredentials : undefined
+          input_message: messages[messages.length - 1]?.content ?? ''
         };
       } else {
         throw new Error('User message not found: messages array is empty or invalid.');
@@ -83,12 +83,38 @@ const handler = async (req: Request): Promise<Response> => {
         top_k: 0,
         collection_name: "string",
         stop: true,
-        jira_credentials: decryptedJiraCredentials?.username && decryptedJiraCredentials?.token ? decryptedJiraCredentials : undefined,
         additionalProp1: {}
-      }
+      };
     }
 
     console.log('aiq - making request to', { url: chatCompletionURL });
+
+    // Check backend configuration to determine auth method
+    const useHeaderAuth = await shouldUseHeaderAuth();
+    console.log(`🔐 Using ${useHeaderAuth ? 'header' : 'body'} auth method for JIRA credentials`);
+
+    let authHeader = {};
+    let finalPayload: any = payload;
+
+    if (decryptedJiraCredentials?.username && decryptedJiraCredentials?.token) {
+      if (useHeaderAuth) {
+        // Send credentials via Authorization header
+        authHeader = { 
+          'Authorization': `Basic ${Buffer.from(`${decryptedJiraCredentials.username}:${decryptedJiraCredentials.token}`).toString('base64')}` 
+        };
+        console.log('🔐 JIRA credentials added to Authorization header');
+      } else {
+        // Send credentials in request body (existing behavior)
+        finalPayload = {
+          ...payload,
+          jira_credentials: {
+            username: decryptedJiraCredentials.username,
+            token: decryptedJiraCredentials.token
+          }
+        };
+        console.log('🔐 JIRA credentials added to request body');
+      }
+    }
 
     let response = await fetch(chatCompletionURL, {
       method: 'POST',
@@ -96,7 +122,7 @@ const handler = async (req: Request): Promise<Response> => {
         'Content-Type': 'application/json',
         'Conversation-Id': req.headers.get('Conversation-Id') || '',
       },
-      body: JSON.stringify(payload),
+      body: JSON.stringify(finalPayload),
     });
 
     console.log('aiq - received response from server', response.status);
@@ -132,30 +158,51 @@ const handler = async (req: Request): Promise<Response> => {
       const responseStream = new ReadableStream({
         async start(controller) {
           const reader = response?.body?.getReader();
+          if (!reader) {
+            console.error('aiq - no response body reader available');
+            controller.close();
+            return;
+          }
+          
           let buffer = '';
-          let counter = 0
+          let counter = 0;
+          let hasReceivedData = false;
+          
           try {
             while (true) {
-              const { done, value } = await reader?.read();
-              if (done) break;
+              const result = await reader.read();
+              if (!result) {
+                console.log('aiq - no result from reader, breaking');
+                break;
+              }
+              
+              const { done, value } = result;
+              if (done) {
+                console.log('aiq - stream done, breaking');
+                break;
+              }
 
               buffer += decoder.decode(value, { stream: true });
               const lines = buffer.split('\n');
               buffer = lines.pop() || '';
 
               for (const line of lines) {
+                console.log('aiq - processing line:', line.substring(0, 100) + '...');
+                
                 if (line.startsWith('data: ')) {
                   const data = line.slice(5);
                   if (data.trim() === '[DONE]') {
+                    console.log('aiq - received [DONE] signal');
                     controller.close();
                     return;
                   }
                   try {
                     const parsed = JSON.parse(data);
-                    const content = parsed.choices[0]?.message?.content || parsed.choices[0]?.delta?.content || '';
+                    const content = parsed.choices?.[0]?.message?.content || parsed.choices?.[0]?.delta?.content || '';
                     if (content) {
-                      // console.log(`aiq - stream response received from server with length`, content?.length)
+                      console.log(`aiq - stream content received, length: ${content.length}`);
                       controller.enqueue(encoder.encode(content));
+                      hasReceivedData = true;
                     }
                   } catch (error) {
                     console.log('aiq - error parsing JSON:', error);
@@ -216,6 +263,19 @@ const handler = async (req: Request): Promise<Response> => {
             controller.close();
           } finally {
             console.log('aiq - response processing is completed, closing stream');
+            
+            // If no data was received, send a fallback message
+            if (!hasReceivedData) {
+              console.log('aiq - no data received in stream, sending fallback');
+              try {
+                const fallbackResponse = await response.text();
+                controller.enqueue(encoder.encode(fallbackResponse));
+              } catch (fallbackError) {
+                console.log('aiq - fallback also failed:', fallbackError);
+                controller.enqueue(encoder.encode('Response received but could not be processed. Please try again.'));
+              }
+            }
+            
             controller.close();
             reader?.releaseLock();
           }
@@ -225,33 +285,75 @@ const handler = async (req: Request): Promise<Response> => {
       return new Response(responseStream);
     }
 
-    // response handling for non straming schema
+    // response handling for non streaming schema
     else {
       console.log('aiq - processing non streaming response');
       const data = await response.text();
+      console.log('aiq - raw response data length:', data.length);
+      console.log('aiq - raw response data preview:', data.substring(0, 200) + '...'); // Log first 200 chars
+      
+      // Check if the response is empty
+      if (!data || data.trim() === '') {
+        console.log('aiq - empty response received');
+        return new Response('No response received from server', {
+          status: 200,
+          headers: { 'Content-Type': 'text/plain' }
+        });
+      }
+      
       let parsed = null;
     
       try {
         parsed = JSON.parse(data);
+        console.log('aiq - parsed response structure:', Object.keys(parsed || {}));
       } catch (error) {
-        console.log('aiq - error parsing JSON response', error);
+        console.log('aiq - error parsing JSON response, treating as plain text:', error);
+        // If it's not JSON, return as plain text - this is likely the case for tool responses
+        console.log('aiq - returning plain text response');
+        return new Response(data, {
+          status: 200,
+          headers: { 'Content-Type': 'text/plain' }
+        });
       }
     
-      // Safely extract content with proper checks
-      const content =
-        parsed?.output || // Check for `output`
-        parsed?.answer || // Check for `answer`
-        parsed?.value ||  // Check for `value`
-        (Array.isArray(parsed?.choices) ? parsed.choices[0]?.message?.content : null) || // Safely check `choices[0]`
-        parsed || // Fallback to the entire `parsed` object
-        data; // Final fallback to raw `data`
+      // Enhanced content extraction with better logging
+      let content = null;
+      
+      if (parsed?.output) {
+        content = parsed.output;
+        console.log('aiq - found content in output field');
+      } else if (parsed?.answer) {
+        content = parsed.answer;
+        console.log('aiq - found content in answer field');
+      } else if (parsed?.value) {
+        content = parsed.value;
+        console.log('aiq - found content in value field');
+      } else if (Array.isArray(parsed?.choices) && parsed.choices[0]?.message?.content) {
+        content = parsed.choices[0].message.content;
+        console.log('aiq - found content in choices[0].message.content');
+      } else if (typeof parsed === 'string') {
+        content = parsed;
+        console.log('aiq - using parsed as string content');
+      } else if (parsed) {
+        content = JSON.stringify(parsed);
+        console.log('aiq - stringifying parsed object');
+      } else {
+        content = data;
+        console.log('aiq - using raw data as content');
+      }
     
       if (content) {
-        console.log('aiq - response processing is completed');
-        return new Response(content);
+        console.log('aiq - response processing completed, content length:', content.length);
+        return new Response(content, {
+          status: 200,
+          headers: { 'Content-Type': 'text/plain' }
+        });
       } else {
-        console.log('aiq - error parsing response');
-        return new Response(response.body || data);
+        console.log('aiq - no content found, returning raw response');
+        return new Response(data, {
+          status: 200,
+          headers: { 'Content-Type': 'text/plain' }
+        });
       }
     }
     

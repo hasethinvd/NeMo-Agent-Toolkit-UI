@@ -42,4 +42,4 @@ services:
 networks:
   tpm-shared-network:
     external: true
-    name: tpm-shared-network 
+    name: tpm-shared-network

@@ -31,6 +31,8 @@ interface StoredEncryptedData {
   rotationSchedule: string; // When next rotation should occur
 }
 
+
+
 // Generate a random password for the session if it doesn't exist
 const getSessionPassword = (keyVersion?: number): string => {
   const keyName = keyVersion ? `${S_KEY}-v${keyVersion}` : S_KEY;
@@ -476,4 +478,6 @@ export const forceKeyRotation = async (): Promise<boolean> => {
         console.error('❌ Manual key rotation failed:', error);
         return false;
     }
-}; 
+};
+
+ 

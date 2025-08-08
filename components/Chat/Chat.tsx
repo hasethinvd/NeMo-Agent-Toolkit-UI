@@ -3,6 +3,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useMemo,
   useRef,
   useState,
 } from 'react';
@@ -22,6 +23,7 @@ import {
 } from '@/utils/app/helper';
 import { throttle } from '@/utils/data/throttle';
 import { getSecureJIRACredentials } from '@/utils/app/crypto';
+import { shouldUseHeaderAuth } from '@/utils/app/api-config';
 import { ChatBody, Conversation, Message } from '@/types/chat';
 import HomeContext from '@/pages/api/home/home.context';
 import { ChatInput } from './ChatInput';
@@ -55,6 +57,7 @@ const safeSessionStorage = {
 
 export const Chat = () => {
   const { t } = useTranslation('chat');
+  
   const {
     state: {
       selectedConversation,
@@ -97,7 +100,7 @@ export const Chat = () => {
 
   // Add these variables near the top of your component
   const isUserInitiatedScroll = useRef(false);
-  const scrollTimeout = useRef(null);
+  const scrollTimeout = useRef<NodeJS.Timeout | null>(null);
 
 
   const openModal = (data : any = {}) => {
@@ -109,11 +112,16 @@ export const Chat = () => {
     // todo send user input to websocket server as user response to interaction message
     // console.log("User response:", userResponse);
     
+    // Check backend configuration to determine auth method
+    const useHeaderAuth = await shouldUseHeaderAuth();
+    console.log(`🔐 WebSocket interaction using ${useHeaderAuth ? 'header' : 'body'} auth method`);
+    
     // Get encrypted credentials data for WebSocket interaction
     const storedDataJSON = safeSessionStorage.getItem('jira-credentials');
     let jiraCredentialsForWS: any = undefined;
 
-    if (storedDataJSON) {
+    if (storedDataJSON && !useHeaderAuth) {
+      // Only include credentials in body if not using header auth
       try {
         const storedData = JSON.parse(storedDataJSON);
         // Check if credentials are expired before sending
@@ -160,6 +168,7 @@ export const Chat = () => {
         ]
       },
       jira_credentials: jiraCredentialsForWS,
+      auth_method: useHeaderAuth ? 'header' : 'body',
       timestamp: new Date().toISOString(),
     };
     console.log('sending user response for interaction message via websocket', wsMessage)
@@ -171,12 +180,27 @@ export const Chat = () => {
   }, [selectedConversation]);
 
   useEffect(() => {
-    if (webSocketModeRef?.current && !webSocketConnectedRef.current) {
-      connectWebSocket();
-    }
-
-    // todo cancel ongoing connection attempts
-    else {
+    // Check if WebSocket mode is enabled
+    if (webSocketModeRef?.current) {
+      const currentUrl = safeSessionStorage.getItem('webSocketURL') || webSocketURL;
+      const connectedUrl = webSocketRef.current?.url;
+      
+      console.log('WebSocket URL useEffect triggered:', { currentUrl, connectedUrl, connected: webSocketConnectedRef.current });
+      
+      // Connect if not connected OR if the URL has changed
+      if (!webSocketConnectedRef.current || (connectedUrl && currentUrl && connectedUrl !== currentUrl)) {
+        // Close existing connection if URL changed
+        if (webSocketConnectedRef.current && connectedUrl && currentUrl && connectedUrl !== currentUrl) {
+          console.log('WebSocket URL changed in useEffect, closing existing connection');
+          webSocketRef.current?.close();
+          webSocketConnectedRef.current = false;
+          homeDispatch({ field: "webSocketConnected", value: false });
+        }
+        
+        connectWebSocket();
+      }
+    } else {
+      // WebSocket mode disabled, dismiss any loading toasts
       toast.dismiss(websocketLoadingToastIdRef.current);
     }
     
@@ -187,6 +211,58 @@ export const Chat = () => {
       }
     };
   }, [webSocketModeRef?.current, webSocketURL]);
+
+  // Add custom event listener to handle settings changes
+  useEffect(() => {
+    console.log('🔧 Setting up websocket-settings-changed event listener');
+    
+    const handleSettingsChange = () => {
+      console.log('🔧 Settings changed event received');
+      // Force re-evaluation of WebSocket connection when settings change
+      const currentUrl = safeSessionStorage.getItem('webSocketURL') || webSocketURL;
+      const connectedUrl = webSocketRef.current?.url;
+      
+      console.log('🔧 URL comparison:', { 
+        currentUrl, 
+        connectedUrl, 
+        areEqual: connectedUrl === currentUrl,
+        wsMode: webSocketModeRef?.current,
+        wsConnected: webSocketConnectedRef.current
+      });
+      
+      // Reconnect if WebSocket mode is enabled AND URLs are different
+      if (webSocketModeRef?.current && currentUrl) {
+        const shouldReconnect = !webSocketConnectedRef.current || 
+                               (connectedUrl && connectedUrl !== currentUrl);
+        
+        if (shouldReconnect) {
+          console.log('🔧 Settings changed, reconnecting WebSocket with new URL');
+          if (webSocketRef.current) {
+            webSocketRef.current?.close();
+            webSocketConnectedRef.current = false;
+            homeDispatch({ field: "webSocketConnected", value: false });
+          }
+          connectWebSocket();
+        } else {
+          console.log('🔧 No reconnection needed:', {
+            reason: connectedUrl === currentUrl ? 'URLs are the same' : 'Unknown'
+          });
+        }
+      } else {
+        console.log('🔧 No reconnection needed:', {
+          reason: !webSocketModeRef?.current ? 'WebSocket mode disabled' :
+                  !currentUrl ? 'No current URL configured' : 'Unknown'
+        });
+      }
+    };
+
+    window.addEventListener('websocket-settings-changed', handleSettingsChange);
+    
+    return () => {
+      console.log('🔧 Removing websocket-settings-changed event listener');
+      window.removeEventListener('websocket-settings-changed', handleSettingsChange);
+    };
+  }, [webSocketURL]);
 
   const connectWebSocket = async (retryCount = 0) => {
 
@@ -562,11 +638,16 @@ export const Chat = () => {
             })
           }
           
+          // Check backend configuration to determine auth method
+          const useHeaderAuth = await shouldUseHeaderAuth();
+          console.log(`🔐 WebSocket chat using ${useHeaderAuth ? 'header' : 'body'} auth method`);
+          
           // Get encrypted credentials data for WebSocket request
           const storedDataJSON = sessionStorage.getItem('jira-credentials');
           let jiraCredentialsForWS: any = undefined;
 
-          if (storedDataJSON) {
+          if (storedDataJSON && !useHeaderAuth) {
+            // Only include credentials in body if not using header auth
             try {
               const storedData = JSON.parse(storedDataJSON);
               // Check if credentials are expired before sending
@@ -603,6 +684,7 @@ export const Chat = () => {
               messages: chatMessages
             },
             jira_credentials: jiraCredentialsForWS,
+            auth_method: useHeaderAuth ? 'header' : 'body',
             timestamp: new Date().toISOString(),
           };
           // console.log('Sent message via websocket', wsMessage)
@@ -694,7 +776,11 @@ export const Chat = () => {
             toast.error('Error: No data received from server');
             return;
           }
-          if (!false) {
+          // Check if response is streamable (has a readable stream)
+          const isStreamable = data && typeof data.getReader === 'function';
+          console.log('aiq - response streamable:', isStreamable);
+          
+          if (isStreamable) {
             if (updatedConversation.messages.length === 1) {
               const { content } = message;
               const customName =
@@ -846,38 +932,49 @@ export const Chat = () => {
               homeDispatch({ field: 'loading', value: false });
             }, 200);
           } else {
-            const { answer } = await response?.json();
-            const updatedMessages: Message[] = [
-              ...updatedConversation.messages,
-              { role: 'assistant', content: answer },
-            ];
-            updatedConversation = {
-              ...updatedConversation,
-              messages: updatedMessages,
-            };
-            homeDispatch({
-              field: 'selectedConversation',
-              value: updateConversation,
-            });
-            saveConversation(updatedConversation);
-            const updatedConversations: Conversation[] = conversations.map(
-              (conversation) => {
-                if (conversation.id === selectedConversation.id) {
-                  return updatedConversation;
-                }
-                return conversation;
-              },
-            );
-            if (updatedConversations.length === 0) {
-              updatedConversations.push(updatedConversation);
+            // Handle non-streaming response
+            console.log('aiq - handling non-streaming response');
+            try {
+              const responseText = await response.text();
+              console.log('aiq - non-streaming response text length:', responseText.length);
+              
+              const updatedMessages: Message[] = [
+                ...updatedConversation.messages,
+                { role: 'assistant', content: responseText },
+              ];
+              updatedConversation = {
+                ...updatedConversation,
+                messages: updatedMessages,
+              };
+              homeDispatch({
+                field: 'selectedConversation',
+                value: updatedConversation,
+              });
+              saveConversation(updatedConversation);
+              const updatedConversations: Conversation[] = conversations.map(
+                (conversation) => {
+                  if (conversation.id === selectedConversation.id) {
+                    return updatedConversation;
+                  }
+                  return conversation;
+                },
+              );
+              if (updatedConversations.length === 0) {
+                updatedConversations.push(updatedConversation);
+              }
+              homeDispatch({
+                field: 'conversations',
+                value: updatedConversations,
+              });
+              saveConversations(updatedConversations);
+              homeDispatch({ field: 'loading', value: false });
+              homeDispatch({ field: 'messageIsStreaming', value: false });
+            } catch (error) {
+              console.error('aiq - error processing non-streaming response:', error);
+              homeDispatch({ field: 'loading', value: false });
+              homeDispatch({ field: 'messageIsStreaming', value: false });
+              toast.error('Error processing response from server');
             }
-            homeDispatch({
-              field: 'conversations',
-              value: updatedConversations,
-            });
-            saveConversations(updatedConversations);
-            homeDispatch({ field: 'loading', value: false });
-            homeDispatch({ field: 'messageIsStreaming', value: false });
           }
         } catch (error) {
           saveConversation(updatedConversation);
@@ -918,7 +1015,6 @@ export const Chat = () => {
   // Add an effect to set up wheel and touchmove event listeners
   useEffect(() => {
     const container = chatContainerRef.current;
-    if (!container) return;
 
     // Function to handle user input events (mouse wheel, touch)
     const handleUserInput = () => {
@@ -934,23 +1030,29 @@ export const Chat = () => {
       }, 200);
     };
 
-    // Add event listeners for user interactions
+    // Only add event listeners if container exists
+    if (container) {
     container.addEventListener('wheel', handleUserInput, { passive: true });
     container.addEventListener('touchmove', handleUserInput, { passive: true });
+    }
     
     return () => {
-      // Clean up
+      // Clean up - only remove listeners if container exists
+      if (container) {
       container.removeEventListener('wheel', handleUserInput);
       container.removeEventListener('touchmove', handleUserInput);
+      }
       if (scrollTimeout.current) {
         clearTimeout(scrollTimeout.current);
       }
     };
-  }, [chatContainerRef.current]); // Only re-run if the container ref changes
+  }, []);
 
 // Now modify your handleScroll function to use this flag
   const handleScroll = useCallback(() => {
-    if (!chatContainerRef.current || !isUserInitiatedScroll.current) return;
+    if (!chatContainerRef.current || !isUserInitiatedScroll.current) {
+      return;
+    }
     
     const { scrollTop, scrollHeight, clientHeight } = chatContainerRef.current;
     const isScrollingUp = scrollTop < lastScrollTop.current;
@@ -983,13 +1085,13 @@ export const Chat = () => {
     homeDispatch({ field: 'autoScroll', value: true });
   };
 
-  const scrollDown = () => {
+  const scrollDown = useCallback(() => {
     if (autoScrollEnabled) {
       messagesEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
     }
-  }
+  }, [autoScrollEnabled]);
 
-  const throttledScrollDown = throttle(scrollDown, 250);
+  const throttledScrollDown = useMemo(() => throttle(scrollDown, 250), [scrollDown]);
 
   useEffect(() => {
     throttledScrollDown();

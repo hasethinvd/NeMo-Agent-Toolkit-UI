@@ -7,6 +7,7 @@ interface Props {
   onSuccess: (sessionId: string) => void;
   title?: string;
   description?: string;
+  userId?: string; // Add userId prop
 }
 
 export const MFAVerificationModal: FC<Props> = ({
@@ -14,7 +15,8 @@ export const MFAVerificationModal: FC<Props> = ({
   onClose,
   onSuccess,
   title = "MFA Verification Required",
-  description = "Please verify your identity to continue with this secure operation."
+  description = "Please verify your identity to continue with this secure operation.",
+  userId = 'aiq-tpm-system' // Default fallback
 }) => {
   const [verificationCode, setVerificationCode] = useState('');
   const [isBackupCode, setIsBackupCode] = useState(false);
@@ -66,7 +68,7 @@ export const MFAVerificationModal: FC<Props> = ({
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
-          'x-user-id': 'default-user',
+          'x-user-id': userId,
         },
         body: JSON.stringify({
           code: verificationCode,

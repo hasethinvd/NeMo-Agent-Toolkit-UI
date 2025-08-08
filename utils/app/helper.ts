@@ -376,6 +376,3 @@ export const fixMalformedHtml = (content = '') => {
         return content; // Return original if fixing fails
     }
 };
-
-
-

@@ -1,6 +1,7 @@
 import { FC, useState, useEffect } from 'react';
 import toast from 'react-hot-toast';
 import { getJIRACredentialStatus, getSecureJIRACredentials } from '../../utils/app/crypto';
+import { getBackendUrl } from '../../utils/app/api-config';
 
 interface MFAStatus {
   enabled: boolean;
@@ -73,7 +74,10 @@ export const MFASettings: FC<Props> = ({ className = '' }) => {
     }
     
     try {
-      const response = await fetch('/api/mfa/status?user_id=' + userId);
+      // Use consistent backend URL that prioritizes UI settings over environment variables
+      const backendUrl = getBackendUrl();
+    
+    const response = await fetch(`${backendUrl}/api/mfa/status?user_id=${userId}`);
       if (response.ok) {
         const data = await response.json();
         
@@ -128,13 +132,19 @@ export const MFASettings: FC<Props> = ({ className = '' }) => {
     try {
       console.log('🔐 Starting MFA setup...');
       
-      const response = await fetch('/api/mfa', {
+      // Use consistent backend URL that prioritizes UI settings over environment variables
+      const backendUrl = getBackendUrl();
+      
+      const response = await fetch(`${backendUrl}/api/mfa/setup`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-user-id': userId,
-          'x-user-email': userEmail,
         },
+        body: JSON.stringify({
+          user_id: userId,
+          user_email: userEmail,
+          force_new: false
+        }),
       });
 
       console.log('🔐 MFA setup response status:', response.status);
@@ -192,13 +202,16 @@ export const MFASettings: FC<Props> = ({ className = '' }) => {
 
     setIsVerifying(true);
     try {
-      const response = await fetch('/api/mfa', {
-        method: 'PUT',
+      // Use consistent backend URL that prioritizes UI settings over environment variables
+      const backendUrl = getBackendUrl();
+      
+      const response = await fetch(`${backendUrl}/api/mfa/verify`, {
+        method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-user-id': userId,
         },
         body: JSON.stringify({
+          user_id: userId,
           code: verificationCode,
           is_backup_code: false,
         }),
@@ -246,13 +259,16 @@ export const MFASettings: FC<Props> = ({ className = '' }) => {
 
     setIsVerifying(true);
     try {
-      const response = await fetch('/api/mfa', {
-        method: 'PUT',
+      // Use consistent backend URL that prioritizes UI settings over environment variables
+      const backendUrl = getBackendUrl();
+      
+      const response = await fetch(`${backendUrl}/api/mfa/verify`, {
+        method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-user-id': userId,
         },
         body: JSON.stringify({
+          user_id: userId,
           code: quickVerifyCode,
           is_backup_code: false,
         }),

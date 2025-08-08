@@ -409,7 +409,7 @@ export const ChatInput = ({
               maxHeight: '400px',
               overflow: `${textareaRef.current && textareaRef.current.scrollHeight > 400 ? 'auto' : 'hidden'}`,
             }}
-            placeholder={isRecording ? 'Listening...' : `Unlock ${workflow} knowledge and expertise`}
+            placeholder={isRecording ? 'Listening...' : `Unlock NAT Toolkit knowledge and expertise`}
             value={content}
             rows={1}
             onCompositionStart={() => setIsTyping(true)}

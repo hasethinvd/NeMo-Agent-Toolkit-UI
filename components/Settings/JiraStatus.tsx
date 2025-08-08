@@ -9,38 +9,68 @@ interface Props {
 
 export const JiraStatus: FC<Props> = ({ className = '' }) => {
   const { t } = useTranslation('settings');
-  const [status, setStatus] = useState<{ expires?: Date; fingerprint?: string } | null>(null);
-  const [credentials, setCredentials] = useState<JIRACredentials | null>(null);
+  const [uiCredentials, setUiCredentials] = useState<JIRACredentials | null>(null);
+  const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
     const updateStatus = async () => {
+    setLoading(true);
+    
+    // Check UI credentials only
       const currentStatus = getJIRACredentialStatus();
-      setStatus(currentStatus);
       if (currentStatus) {
         const creds = await getSecureJIRACredentials();
-        setCredentials(creds);
+      setUiCredentials(creds);
       } else {
-        setCredentials(null);
+      setUiCredentials(null);
       }
+    
+    setLoading(false);
     };
 
+  useEffect(() => {
     updateStatus();
 
     window.addEventListener('jira-credentials-changed', updateStatus);
+    window.addEventListener('websocket-settings-changed', updateStatus);
 
     return () => {
       window.removeEventListener('jira-credentials-changed', updateStatus);
+      window.removeEventListener('websocket-settings-changed', updateStatus);
     };
   }, []);
 
-  const isConnected = status && credentials;
+  const getStatus = () => {
+    if (loading) return { connected: false, message: 'Checking...', color: 'gray' };
+    
+    if (uiCredentials) {
+      return {
+        connected: true,
+        message: `JIRA Connected (${uiCredentials.username})`,
+        color: 'green'
+      };
+    } else {
+      return {
+        connected: false,
+        message: 'JIRA Not Connected',
+        color: 'red'
+      };
+    }
+  };
+
+  const status = getStatus();
 
   return (
-    <div className={`flex items-center gap-2 ${className}`}>
-      <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500' : 'bg-red-500'}`} />
-      <span className="text-sm text-gray-600 dark:text-gray-300">
-        {isConnected ? `JIRA Connected (${credentials.username})` : 'JIRA Not Connected'}
+    <div className={`flex flex-col gap-1 ${className}`}>
+      <div className="flex items-center gap-2">
+        <div className={`w-2 h-2 rounded-full ${
+          status.color === 'green' ? 'bg-green-500' :
+          status.color === 'gray' ? 'bg-gray-400' :
+          'bg-red-500'
+        }`} />
+        <span className="text-sm text-gray-600 dark:text-gray-300 font-medium">
+          {status.message}
       </span>
+      </div>
     </div>
   );
 }; 

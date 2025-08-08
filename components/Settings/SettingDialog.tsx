@@ -6,6 +6,9 @@ import { JiraStatus } from './JiraStatus';
 import { clearJIRACredentials, getJIRACredentialStatus, setSecureJIRACredentials, getSecureJIRACredentials } from '../../utils/app/crypto';
 import SecurityDashboard from './SecurityDashboard';
 import { MFAVerifyModal } from './MFAVerifyModal';
+import { validateJIRACredentialsWithRetry } from '@/utils/app/jira-validation';
+import { showErrorToast, createMFAError, createNetworkError, createBackendError, parseResponseError } from '@/utils/app/error-handler';
+import { getBackendUrl } from '@/utils/app/api-config';
 
 
 interface Props {
@@ -54,7 +57,12 @@ export const SettingDialog: FC<Props> = ({ open, onClose }) => {
   const [hasCredentials, setHasCredentials] = useState(false);
   const [hasMFA, setHasMFA] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-  
+  const [isValidatingJira, setIsValidatingJira] = useState(false);
+  const [isCheckingMfa, setIsCheckingMfa] = useState(false);
+  const [lastErrorType, setLastErrorType] = useState<string | null>(null);
+  const [errorCooldown, setErrorCooldown] = useState(false);
+  const [currentStep, setCurrentStep] = useState<string>('');
+
   // MFA modal states
   const [showMfaSetup, setShowMfaSetup] = useState(false);
   const [showMfaVerify, setShowMfaVerify] = useState(false);
@@ -85,55 +93,65 @@ export const SettingDialog: FC<Props> = ({ open, onClose }) => {
     }
   }, []);
 
+  // Load JIRA credentials and MFA status on component mount
   useEffect(() => {
-    const updateCredentialStatus = async () => {
-      const status = getJIRACredentialStatus();
-      const hasJiraCredentials = !!status?.fingerprint;
-      
-      // Get JIRA username for MFA user ID
-      let userId = 'aiq-tpm-system';
+    const loadCredentials = async () => {
       try {
-        const credentials = await getSecureJIRACredentials();
-        if (credentials?.username) {
-          userId = credentials.username;
+        // Check if credentials exist
+        const status = getJIRACredentialStatus();
+        const hasJiraCredentials = !!status?.fingerprint;
+        setHasCredentials(hasJiraCredentials);
+        
+        // Get actual credentials if they exist
+        let userId = 'aiq-tpm-system';
+        if (hasJiraCredentials) {
+          try {
+            const credentials = await getSecureJIRACredentials();
+            if (credentials?.username) {
+              setJiraUsernameValue(credentials.username);
+              setJiraTokenValue(credentials.token);
+              userId = credentials.username;
+            }
+          } catch (error) {
+            console.log('Could not get JIRA credentials:', error);
+          }
+        }
+        
+        // Check MFA status using sessionStorage backend URL
+        // Get backend URL from sessionStorage or fallback to environment variable
+        const storedChatURL = safeSessionStorage.getItem('chatCompletionURL');
+        let backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'https://0.0.0.0:8000'; // use env var or fallback to 8000
+        
+        if (storedChatURL) {
+          // Extract base URL from stored chat completion URL
+          const url = new URL(storedChatURL);
+          backendUrl = `${url.protocol}//${url.host}`;
+        }
+        
+        try {
+          const mfaResponse = await fetch(`${backendUrl}/api/mfa/status?user_id=${userId}`, {
+            method: 'GET',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+          });
+          
+          if (mfaResponse.ok) {
+            const mfaData = await mfaResponse.json();
+            setHasMFA(mfaData.enabled);
+          }
+        } catch (mfaError) {
+          console.log('MFA status check failed (this is normal if backend is not running):', mfaError);
+          setHasMFA(false);
         }
       } catch (error) {
-        console.log('Could not get JIRA username for MFA check:', error);
+        console.error('Error loading credentials:', error);
       }
-      
-      // Check MFA status with correct user ID
-      let mfaEnabled = false;
-      try {
-        const mfaResponse = await fetch(`/api/mfa/status?user_id=${userId}`);
-        const mfaStatus = await mfaResponse.json();
-        mfaEnabled = mfaStatus.enabled;
-      } catch (error) {
-        console.log('Could not check MFA status:', error);
-      }
-      
-      setHasCredentials(hasJiraCredentials);
-      setHasMFA(mfaEnabled);
-    };
-
-    updateCredentialStatus();
-    
-    // Listen for credential changes
-    const handleCredentialChange = () => {
-      updateCredentialStatus();
     };
     
-    // Listen for MFA status changes
-    const handleMFAChange = () => {
-      updateCredentialStatus();
-    };
-    
-    window.addEventListener('jira-credentials-changed', handleCredentialChange);
-    window.addEventListener('mfa-status-changed', handleMFAChange);
-    
-    return () => {
-      window.removeEventListener('jira-credentials-changed', handleCredentialChange);
-      window.removeEventListener('mfa-status-changed', handleMFAChange);
-    };
+    if (open) {
+      loadCredentials();
+    }
   }, [open]);
 
   useEffect(() => {
@@ -156,251 +174,321 @@ export const SettingDialog: FC<Props> = ({ open, onClose }) => {
     };
   }, [open, onClose]);
 
-  const handleSave = async () => {
-    console.log('🔧 handleSave called with:', {
-      chatCompletionEndPoint,
-      webSocketEndPoint,
-      jiraUsernameValue,
-      hasJiraToken: !!jiraTokenValue,
-      jiraTokenLength: jiraTokenValue?.length
-    });
-    
-    console.log('🔍 Debug: Checking required fields:', {
-      chatCompletionEndPoint: chatCompletionEndPoint,
-      webSocketEndPoint: webSocketEndPoint,
-      hasCompletion: !!chatCompletionEndPoint,
-      hasWebSocket: !!webSocketEndPoint
-    });
-    
-    if(!chatCompletionEndPoint || !webSocketEndPoint) {
-      console.log('❌ Debug: Missing required fields, returning early');
-      toast.error('Please fill all the fields to save settings');
-      return;
+  // Validate basic settings fields
+  const validateSettings = (): boolean => {
+    if (!chatCompletionEndPoint || !webSocketEndPoint) {
+      toast.error('Please fill in both Chat Completion URL and WebSocket URL');
+      return false;
+    }
+    return true;
+  };
+
+  // Reset error state after timeout to prevent spam
+  useEffect(() => {
+    if (errorCooldown) {
+      const timer = setTimeout(() => {
+        setErrorCooldown(false);
+        setLastErrorType(null);
+      }, 3000); // 3 second cooldown
+      return () => clearTimeout(timer);
+    }
+  }, [errorCooldown]);
+
+  // Get the backend URL that will be used after save
+  const getTargetBackendUrl = (): string => {
+    try {
+      if (chatCompletionEndPoint) {
+        return new URL(chatCompletionEndPoint).origin;
+      }
+    } catch (urlError) {
+      console.warn('🔗 Invalid chat completion URL format, using default');
+    }
+    return process.env.NEXT_PUBLIC_BACKEND_URL || 'https://127.0.0.1:8080';
+  };
+
+  // Handle MFA flow after JIRA validation
+  const handleMfaFlow = async (forceNew: boolean = false): Promise<boolean> => {
+    try {
+      setCurrentStep('Setting up MFA...');
+      
+      // Call the actual MFA setup API to get QR code
+      const targetBackendUrl = getTargetBackendUrl();
+      const response = await fetch(`${targetBackendUrl}/api/mfa/setup`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          user_id: jiraUsernameValue,
+          user_email: `${jiraUsernameValue}@nvidia.com`,
+          force_new: forceNew
+        }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        console.log('🔐 MFA setup response data:', data);
+        
+        if (data.success) {
+          // Handle different possible API response formats
+          const qrCodeData = data.qr_code || data.qr_code_data || data.qrCode || '';
+          
+          if (!qrCodeData) {
+            console.warn('🔐 No QR code data in response:', Object.keys(data));
+          }
+          
+          setMfaSetupData({
+            username: jiraUsernameValue,
+            email: `${jiraUsernameValue}@nvidia.com`,
+            qrCodeUrl: data.qr_code_url || '',
+            secret: data.secret || '',
+            qr_code: qrCodeData, // This is the base64 QR code image
+            is_existing: data.is_existing || false,
+            backup_codes: data.backup_codes || []
+          });
+          
+          console.log('🔐 Setting MFA setup data with QR code length:', qrCodeData.length);
+          setShowMfaSetup(true);
+          setCurrentStep(''); // Clear step indicator when modal is shown
+          return true; // Success - waiting for user input, not failure
+        } else {
+          throw new Error(data.error || 'MFA setup failed');
+        }
+      } else {
+        const errorText = await response.text();
+        console.error('🔐 MFA setup HTTP error:', response.status, errorText);
+        throw new Error(`MFA setup failed: ${response.status} - ${errorText}`);
+      }
+      
+    } catch (error) {
+      console.error('MFA flow error:', error);
+      setCurrentStep('');
+      
+      if (!errorCooldown) {
+        showErrorToast(createMFAError({
+          message: 'Failed to start MFA setup',
+          isSetup: true
+        }));
+        setLastErrorType('mfa');
+        setErrorCooldown(true);
+      }
+      return false; // Actual failure
+    }
+  };
+
+  // Validate JIRA credentials upfront before starting MFA flow
+  const validateAndProcessJiraCredentials = async (): Promise<boolean> => {
+    if (!jiraUsernameValue || !jiraTokenValue) {
+      return true; // No JIRA credentials to validate, proceed with settings save
     }
 
-    // If trying to save JIRA credentials, handle MFA automatically
-    console.log('🔍 Debug: About to check JIRA credentials:', {
-      jiraUsernameValue: jiraUsernameValue,
-      jiraTokenValue: jiraTokenValue ? '***HIDDEN***' : null,
-      hasUsername: !!jiraUsernameValue,
-      hasToken: !!jiraTokenValue,
-      condition: !!(jiraUsernameValue && jiraTokenValue)
+    // Prevent multiple simultaneous validations
+    if (isValidatingJira || errorCooldown) {
+      console.log('🔧 Validation already in progress or in cooldown, skipping');
+      return false;
+    }
+
+    setCurrentStep('Validating JIRA...');
+    console.log('🔐 Validating JIRA credentials for user:', jiraUsernameValue);
+    setIsValidatingJira(true);
+    setLastErrorType(null);
+
+    try {
+      // Use the target backend URL (after settings save) for validation
+      const targetBackendUrl = getTargetBackendUrl();
+      console.log('🔗 Using target backend URL for JIRA validation:', targetBackendUrl);
+      
+      const validation = await validateJIRACredentialsWithRetry(
+        jiraUsernameValue.trim(),
+        jiraTokenValue.trim(),
+        targetBackendUrl
+      );
+
+      if (!validation.isValid) {
+        setCurrentStep('');
+        console.log('🔍 JIRA validation failed:', {
+          errorType: validation.error?.type,
+          errorMessage: validation.error?.message,
+          technicalDetails: validation.error?.technicalDetails,
+          backendUrl: targetBackendUrl
+        });
+        
+        // Prevent duplicate error handling
+        if (lastErrorType !== validation.error?.type) {
+          showErrorToast(validation.error!);
+          setLastErrorType(validation.error?.type || 'unknown');
+          setErrorCooldown(true);
+          
+          // Only call recovery actions once per error type
+          if (validation.error?.type === 'BACKEND_UNAVAILABLE') {
+            handleRecoveryActions('backend');
+          } else if (validation.error?.type === 'JIRA_CREDENTIALS') {
+            handleRecoveryActions('jira');
+          } else {
+            handleRecoveryActions('network');
+          }
+        }
+        
+        return false; // Actual validation failure
+      }
+
+      console.log('✅ JIRA credentials are valid, proceeding with MFA flow');
+      
+      const mfaResult = await handleMfaFlow();
+      return mfaResult; // true = MFA modal shown (success), false = MFA setup failed
+      
+    } catch (error) {
+      setCurrentStep('');
+      console.error('JIRA validation error:', error);
+      
+      // Prevent duplicate error handling
+      if (lastErrorType !== 'network') {
+        showErrorToast(createNetworkError('JIRA credential validation'));
+        setLastErrorType('network');
+        setErrorCooldown(true);
+        handleRecoveryActions('network');
+      }
+      return false;
+    } finally {
+      setIsValidatingJira(false);
+    }
+  };
+
+  // Get backend URL from current settings - now using the imported centralized function
+  // but override with current UI state if user is actively editing
+  const getCurrentBackendUrl = (): string => {
+    if (chatCompletionEndPoint) {
+      const url = new URL(chatCompletionEndPoint);
+      return `${url.protocol}//${url.host}`;
+    }
+    // Fall back to the centralized function for consistent behavior
+    return getBackendUrl();
+  };
+
+
+
+  // Check MFA status from backend
+  const checkMfaStatus = async (backendUrl: string) => {
+    const response = await fetch(`${backendUrl}/api/mfa/status?user_id=${jiraUsernameValue}`, {
+      method: 'GET',
+      headers: { 'Content-Type': 'application/json' },
     });
-    
-    if (jiraUsernameValue && jiraTokenValue) {
-      console.log('🔐 JIRA credentials detected, starting MFA flow for user:', jiraUsernameValue);
-      try {
-        // Check if MFA is already set up for this user
-        console.log('🔍 Checking MFA status for user:', jiraUsernameValue);
-        const mfaResponse = await fetch(`/api/mfa/status?user_id=${jiraUsernameValue}`);
-        console.log('🔍 MFA status response:', mfaResponse.status, mfaResponse.ok);
-        
-        if (!mfaResponse.ok) {
-          console.error('❌ MFA status check failed:', mfaResponse.status);
-          toast.error('Failed to check MFA status. Please try again.');
-          return;
-        }
-        
-        const mfaStatus = await mfaResponse.json();
-        console.log('🔍 MFA status data:', mfaStatus);
-        
-        if (!mfaStatus.enabled) {
-          // MFA not set up - trigger automatic MFA setup
-          toast('🔐 Setting up MFA for your JIRA account...');
-          
-          try {
-            const mfaSetupResponse = await fetch('/api/mfa', {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'x-user-id': jiraUsernameValue,
-                'x-user-email': `${jiraUsernameValue}@nvidia.com`,
-              },
-            });
 
-            if (mfaSetupResponse.ok) {
-              const setupData = await mfaSetupResponse.json();
-              
-              if (setupData.success) {
-                // Show MFA setup modal with QR code
-                setMfaSetupData({
-                  qr_code: setupData.qr_code,
-                  backup_codes: setupData.backup_codes || [],
-                  is_existing: setupData.is_existing || false,
-                  username: jiraUsernameValue,
-                  email: `${jiraUsernameValue}@nvidia.com`
-                });
-                setShowMfaSetup(true);
-                
-                if (setupData.is_existing) {
-                  toast.success('🔐 Using your existing MFA setup. Enter a code from your authenticator app to complete JIRA setup.');
-                } else {
-                  toast.success('🔐 MFA setup initiated. Please scan the QR code and verify to complete JIRA setup.');
-                }
-                return; // Don't save JIRA credentials yet - wait for MFA verification
-              } else {
-                toast.error(`MFA setup failed: ${setupData.error || 'Unknown error'}`);
-                return;
-              }
-            } else {
-              toast.error('Failed to set up MFA. Please try again.');
-              return;
-            }
-          } catch (mfaError) {
-            console.error('MFA setup error:', mfaError);
-            toast.error('Failed to set up MFA. Please try again.');
-            return;
-          }
-        } else {
-          // MFA is set up - check if we have an active session
-          const storedSessionId = safeSessionStorage.getItem('mfa_session_id');
-          const storedSessionUser = safeSessionStorage.getItem('mfa_session_user');
-          
-          if (!storedSessionId || storedSessionUser !== jiraUsernameValue) {
-            // No active session - fetch QR code and show MFA verification modal
-            try {
-              const mfaSetupResponse = await fetch('/api/mfa', {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                  'x-user-id': jiraUsernameValue,
-                  'x-user-email': `${jiraUsernameValue}@nvidia.com`,
-                },
-              });
-
-              console.log('SettingDialog: MFA Setup Response status (1st):', mfaSetupResponse.status);
-              if (mfaSetupResponse.ok) {
-                const setupData = await mfaSetupResponse.json();
-                console.log('SettingDialog: MFA Setup Response data (1st):', {
-                  success: setupData.success,
-                  hasQrCode: !!setupData.qr_code,
-                  qrCodeLength: setupData.qr_code ? setupData.qr_code.length : 0,
-                  isExisting: setupData.is_existing
-                });
-                const mfaData = {
-                  username: jiraUsernameValue,
-                  email: `${jiraUsernameValue}@nvidia.com`,
-                  qr_code: setupData.qr_code
-                };
-                console.log('🔍 Debug: Setting mfaVerifyData (1st):', mfaData);
-                setMfaVerifyData(mfaData);
-              } else {
-                console.log('SettingDialog: MFA Setup Response failed (1st):', mfaSetupResponse.status);
-                setMfaVerifyData({
-                  username: jiraUsernameValue,
-                  email: `${jiraUsernameValue}@nvidia.com`
-                });
-              }
-            } catch (error) {
-              console.error('Error fetching QR code:', error);
-              setMfaVerifyData({
-                username: jiraUsernameValue,
-                email: `${jiraUsernameValue}@nvidia.com`
-              });
-            }
-            
-            console.log('🔍 Debug: Setting MFA verify modal to true');
-            setShowMfaVerify(true);
-            console.log('🔍 Debug: MFA verify modal state should now be true');
-            toast('🔐 Please verify your MFA to complete JIRA setup.');
-            return; // Don't save JIRA credentials yet - wait for MFA verification
-          }
-          
-          // Validate the existing session
-          const sessionResponse = await fetch(`/api/mfa/session/validate?session_id=${storedSessionId}&user_id=${jiraUsernameValue}`);
-          if (!sessionResponse.ok) {
-            // Session expired - fetch QR code and show MFA verification modal
-            safeSessionStorage.removeItem('mfa_session_id');
-            safeSessionStorage.removeItem('mfa_session_user');
-            
-            try {
-              const mfaSetupResponse = await fetch('/api/mfa', {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                  'x-user-id': jiraUsernameValue,
-                  'x-user-email': `${jiraUsernameValue}@nvidia.com`,
-                },
-              });
-
-              if (mfaSetupResponse.ok) {
-                const setupData = await mfaSetupResponse.json();
-                setMfaVerifyData({
-                  username: jiraUsernameValue,
-                  email: `${jiraUsernameValue}@nvidia.com`,
-                  qr_code: setupData.qr_code
-                });
-              } else {
-                setMfaVerifyData({
-                  username: jiraUsernameValue,
-                  email: `${jiraUsernameValue}@nvidia.com`
-                });
-              }
-            } catch (error) {
-              console.error('Error fetching QR code:', error);
-              setMfaVerifyData({
-                username: jiraUsernameValue,
-                email: `${jiraUsernameValue}@nvidia.com`
-              });
-            }
-            
-            setShowMfaVerify(true);
-            toast('🔐 MFA session expired. Please verify your MFA to complete JIRA setup.');
-            return;
-          }
-          
-          const sessionData = await sessionResponse.json();
-          if (!sessionData.valid) {
-            // Session invalid - fetch QR code and show MFA verification modal
-            safeSessionStorage.removeItem('mfa_session_id');
-            safeSessionStorage.removeItem('mfa_session_user');
-            
-            try {
-              const mfaSetupResponse = await fetch('/api/mfa', {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                  'x-user-id': jiraUsernameValue,
-                  'x-user-email': `${jiraUsernameValue}@nvidia.com`,
-                },
-              });
-
-              if (mfaSetupResponse.ok) {
-                const setupData = await mfaSetupResponse.json();
-                setMfaVerifyData({
-                  username: jiraUsernameValue,
-                  email: `${jiraUsernameValue}@nvidia.com`,
-                  qr_code: setupData.qr_code
-                });
-              } else {
-                setMfaVerifyData({
-                  username: jiraUsernameValue,
-                  email: `${jiraUsernameValue}@nvidia.com`
-                });
-              }
-            } catch (error) {
-              console.error('Error fetching QR code:', error);
-              setMfaVerifyData({
-                username: jiraUsernameValue,
-                email: `${jiraUsernameValue}@nvidia.com`
-              });
-            }
-            
-            setShowMfaVerify(true);
-            toast('🔐 MFA session expired. Please verify your MFA to complete JIRA setup.');
-            return;
-          }
-          
-          // MFA session is valid - proceed with JIRA credential save
-        }
-        
-      } catch (error) {
-        console.error('Error checking MFA status:', error);
-        toast.error('⚠️ Cannot verify MFA status. Please try again.');
-        return;
+    if (!response.ok) {
+      if (response.status >= 500) {
+        throw createBackendError('MFA status check');
+      } else {
+        throw createMFAError({ message: `MFA status check failed (${response.status})` });
       }
     }
 
+    return response.json();
+  };
+
+  // Initiate MFA setup
+  const initiateMfaSetup = async (backendUrl: string): Promise<boolean> => {
+    try {
+      const response = await fetch(`${backendUrl}/api/mfa/setup`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          user_id: jiraUsernameValue,
+          user_email: `${jiraUsernameValue}@nvidia.com`,
+          force_new: false
+        }),
+      });
+
+      if (!response.ok) {
+        throw createMFAError({ message: 'MFA setup request failed', isSetup: true });
+      }
+
+      const setupData = await response.json();
+      if (!setupData.success) {
+        throw createMFAError({ message: setupData.error || 'MFA setup failed', isSetup: true });
+      }
+
+      // Show MFA setup modal
+      setMfaSetupData({
+        qr_code: setupData.qr_code,
+        backup_codes: setupData.backup_codes || [],
+        is_existing: setupData.is_existing || false,
+        username: jiraUsernameValue,
+        email: `${jiraUsernameValue}@nvidia.com`
+      });
+      setShowMfaSetup(true);
+
+      if (setupData.is_existing) {
+        toast.success('🔐 Using your existing MFA setup. Enter a code from your authenticator app.');
+      } else {
+        toast.success('🔐 MFA setup initiated. Please scan the QR code and verify.');
+      }
+
+             return false; // Don't continue with save - wait for MFA verification
+     } catch (error) {
+       showErrorToast(error instanceof Error ? error : createMFAError({ 
+         message: 'MFA setup failed', 
+         isSetup: true 
+       }));
+       return false;
+     }
+  };
+
+  // Validate existing MFA session
+  const validateMfaSession = async (backendUrl: string): Promise<boolean> => {
+    const storedSessionId = safeSessionStorage.getItem('mfa_session_id');
+    const storedSessionUser = safeSessionStorage.getItem('mfa_session_user');
+
+    if (!storedSessionId || storedSessionUser !== jiraUsernameValue) {
+      // No active session - require MFA verification
+      return await requireMfaVerification();
+    }
+
+    try {
+      // Validate existing session
+      const response = await fetch(`${backendUrl}/api/mfa/session/validate?session_id=${storedSessionId}&user_id=${jiraUsernameValue}`);
+      
+      if (!response.ok) {
+        // Session expired
+        clearMfaSession();
+        return await requireMfaVerification();
+      }
+
+      const sessionData = await response.json();
+      if (!sessionData.valid) {
+        // Session invalid
+        clearMfaSession();
+        return await requireMfaVerification();
+      }
+
+      // Session is valid - proceed with save
+      return true;
+    } catch (error) {
+      console.error('Session validation error:', error);
+      clearMfaSession();
+      return await requireMfaVerification();
+    }
+  };
+
+  // Require MFA verification
+  const requireMfaVerification = async (): Promise<boolean> => {
+    setMfaVerifyData({
+      username: jiraUsernameValue,
+      email: `${jiraUsernameValue}@nvidia.com`
+    });
+    setShowMfaVerify(true);
+    toast('🔐 Please verify your MFA to complete JIRA setup.');
+    return false; // Don't continue with save - wait for MFA verification
+  };
+
+  // Clear MFA session data
+  const clearMfaSession = () => {
+    safeSessionStorage.removeItem('mfa_session_id');
+    safeSessionStorage.removeItem('mfa_session_user');
+  };
+
+  // Save application settings (non-JIRA)
+  const saveApplicationSettings = () => {
+    // Update Redux state
     homeDispatch({ field: 'lightMode', value: theme });
     homeDispatch({ field: 'chatCompletionURL', value: chatCompletionEndPoint });
     homeDispatch({ field: 'webSocketURL', value: webSocketEndPoint });
@@ -409,22 +497,78 @@ export const SettingDialog: FC<Props> = ({ open, onClose }) => {
     homeDispatch({ field: 'intermediateStepOverride', value: intermediateStepOverrideToggle });
     homeDispatch({ field: 'enableIntermediateSteps', value: isIntermediateStepsEnabled });
     
+    // Update session storage
     safeSessionStorage.setItem('chatCompletionURL', chatCompletionEndPoint);
     safeSessionStorage.setItem('webSocketURL', webSocketEndPoint);
     safeSessionStorage.setItem('webSocketSchema', webSocketSchema);
+    safeSessionStorage.setItem('backendUrl', chatCompletionEndPoint.replace('/chat/stream', ''));
     safeSessionStorage.setItem('expandIntermediateSteps', String(detailsToggle));
     safeSessionStorage.setItem('intermediateStepOverride', String(intermediateStepOverrideToggle));
     safeSessionStorage.setItem('enableIntermediateSteps', String(isIntermediateStepsEnabled));
-    
-    // JIRA credentials are now handled through MFA flow above
-    // This section should not run if JIRA credentials exist
-    console.log('🔧 Skipping direct JIRA save - handled by MFA flow');
 
+    // Dispatch events
     window.dispatchEvent(new Event('storage'));
+    window.dispatchEvent(new Event('websocket-settings-changed'));
     window.dispatchEvent(new Event('jira-credentials-changed'));
+  };
 
-    toast.success('Settings saved successfully');
-    onClose();
+  // Main save handler - much cleaner and more linear
+  const handleSave = async () => {
+    if (isSaving || isValidatingJira || isCheckingMfa) {
+      console.log('🔧 Save already in progress or validation running, skipping');
+      return; // Prevent double-clicking and overlapping operations
+    }
+    
+    console.log('🔧 Starting save process...');
+    setIsSaving(true);
+    setLastErrorType(null);
+
+    try {
+      // Step 1: Validate basic settings first
+      if (!validateSettings()) {
+        return;
+      }
+
+      // Step 2: Save basic settings immediately (don't wait for JIRA validation)
+      console.log('🔧 Saving basic application settings...');
+      saveApplicationSettings();
+
+      // Step 3: If JIRA credentials provided, validate and handle MFA
+      if (jiraUsernameValue && jiraTokenValue) {
+        console.log('🔧 JIRA credentials provided, starting validation...');
+        const shouldProceed = await validateAndProcessJiraCredentials();
+        if (!shouldProceed) {
+          // Only show warning if validation actually failed
+          console.log('🔧 JIRA validation failed, but basic settings were saved');
+          toast('Basic settings saved', {
+              icon: '⚙️',
+            });
+          return;
+        }
+        // If shouldProceed is true, either JIRA is complete OR MFA modal is waiting
+        // Don't show any message yet - let MFA completion handle it
+        console.log('🔧 JIRA credentials validated, MFA flow initiated');
+        return; // Wait for MFA completion
+      } else {
+        // No JIRA credentials, just finish with basic settings
+        toast.success('Settings saved successfully');
+        onClose();
+        return;
+      }
+      
+    } catch (error) {
+      console.error('Save error:', error);
+      
+      // Only show error if we haven't shown one recently
+      if (!errorCooldown) {
+        showErrorToast(createNetworkError('saving settings'));
+        setLastErrorType('network');
+        setErrorCooldown(true);
+      }
+    } finally {
+      setIsSaving(false);
+      setCurrentStep('');
+    }
   };
 
   const resetMfaModalStates = () => {
@@ -435,176 +579,254 @@ export const SettingDialog: FC<Props> = ({ open, onClose }) => {
     setMfaCode('');
   };
 
+  // Enhanced error recovery - help users recover from various failure states
+  const handleRecoveryActions = (errorType: string) => {
+    // Remove duplicate toasts - the main error toast already handles user messaging
+    // This function is now just for internal error categorization
+    console.log(`🔧 Error recovery triggered for type: ${errorType}`);
+  };
+
   const handleClearJira = async () => {
     try {
       let clearedItems = [];
       
-      // Clear JIRA credentials if they exist
-      if (hasCredentials) {
-        clearJIRACredentials();
-        setHasCredentials(false);
-        setJiraUsernameValue('');
-        setJiraTokenValue('');
-        clearedItems.push('JIRA credentials');
+      // Always clear the form fields regardless of hasCredentials state
+      setJiraUsernameValue('');
+      setJiraTokenValue('');
+      
+      // Always clear stored credentials (in case they exist but hasCredentials is wrong)
+      clearJIRACredentials();
+      setHasCredentials(false);
+      clearedItems.push('JIRA credentials');
+
+      // Clear MFA session
+      const currentBackendUrl = chatCompletionEndPoint ? 
+        new URL(chatCompletionEndPoint).origin : 
+        (process.env.NEXT_PUBLIC_BACKEND_URL || 'https://127.0.0.1:8080');
+      
+      try {
+        await fetch(`${currentBackendUrl}/api/mfa/clear-session`, { 
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' }
+        });
+        clearedItems.push('MFA session');
+      } catch (error) {
+        console.warn('🔧 Could not clear MFA session (this is expected if server is not running)');
       }
-      
-      // Clear MFA session but keep the authenticator account
-      if (hasMFA) {
-        try {
-          // Clear any stored MFA session data (disconnects MFA but keeps the secret)
-          safeSessionStorage.removeItem('mfa_session_id');
-          safeSessionStorage.removeItem('mfa_session_user');
-          clearedItems.push('MFA session (authenticator account preserved)');
-        } catch (mfaError) {
-          console.error('Error clearing MFA session:', mfaError);
-          toast.error('Error clearing MFA session');
-          return;
-        }
+
+      // Clear any stored MFA state
+      resetMfaModalStates();
+      clearedItems.push('MFA setup state');
+
+      // Clear any session storage items that might contain JIRA data
+      try {
+        ['jira_session_id', 'jira_session_user', 'mfa_session_id', 'mfa_session_user'].forEach(key => {
+          sessionStorage.removeItem(key);
+        });
+      } catch (error) {
+        console.warn('🔧 Could not clear session storage items:', error);
       }
-      
-      // Reset MFA modal states to ensure clean state
-      setShowMfaSetup(false);
-      setShowMfaVerify(false);
-      setMfaSetupData(null);
-      setMfaVerifyData(null);
-      setMfaCode('');
-      
-      // Dispatch events to notify other components
+
+      // Dispatch events to notify other components about the clearing
       window.dispatchEvent(new Event('storage'));
       window.dispatchEvent(new Event('jira-credentials-changed'));
+      window.dispatchEvent(new Event('websocket-settings-changed'));
+
+      toast.success('Cleared JIRA and MFA credentials');
+      console.log('🧹 All JIRA credential data cleared successfully');
       
-      if (clearedItems.length > 0) {
-        toast.success(`${clearedItems.join(' and ')} cleared successfully`);
-      }
     } catch (error) {
-      console.error('Error clearing security settings:', error);
-      toast.error('Error clearing security settings');
+      console.error('🔧 Error during clear operation:', error);
+      toast.error('❌ Error clearing data');
     }
   };
 
+
+
   const handleMfaVerification = async (isVerifyOnly: boolean) => {
+    // Basic validation
     if (!mfaCode || mfaCode.length !== 6) {
       toast.error('Please enter a valid 6-digit code');
       return;
     }
 
+    // Prevent multiple simultaneous MFA checks
+    if (isCheckingMfa) {
+      console.log('🔧 MFA verification already in progress, skipping');
+      return;
+    }
+
+    const userId = isVerifyOnly ? mfaVerifyData?.username : mfaSetupData?.username;
+    if (!userId) {
+      toast.error('❌ User information missing for MFA verification');
+      return;
+    }
+
+    setCurrentStep('Verifying MFA code...');
+    console.log('🔐 MFA Verification starting for user:', userId);
+    setIsCheckingMfa(true);
+
     try {
-      const userId = isVerifyOnly ? mfaVerifyData?.username : mfaSetupData?.username;
-      console.log('MFA Verification - User ID:', userId);
-      console.log('MFA Verification - Code:', mfaCode);
-      console.log('MFA Verification - Is Verify Only:', isVerifyOnly);
-      
-      const response = await fetch('/api/mfa', {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-user-id': userId,
-        },
+      // Use the same target backend URL as MFA setup
+      const targetBackendUrl = getTargetBackendUrl();
+      console.log('🔗 Using target backend URL for MFA verification:', targetBackendUrl);
+
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 second timeout
+
+      // Use the exact format expected by backend: user_id, code, is_backup_code
+      const response = await fetch(`${targetBackendUrl}/api/mfa/verify`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          code: mfaCode,
-          is_backup_code: false,
+          user_id: userId,
+          code: mfaCode.trim(),
+          is_backup_code: false
         }),
+        signal: controller.signal
       });
 
-      console.log('MFA Verification - Response status:', response.status);
-      
+      clearTimeout(timeoutId);
+      console.log('🔐 MFA verification response status:', response.status);
+
       if (response.ok) {
         const data = await response.json();
-        console.log('MFA Verification - Response data:', data);
+        console.log('🔐 MFA verification response data:', data);
         
         if (data.success) {
-          // Store the session ID
-          if (data.session_id) {
-            safeSessionStorage.setItem('mfa_session_id', data.session_id);
-            safeSessionStorage.setItem('mfa_session_user', userId);
-          }
+          setCurrentStep('MFA verified - Saving JIRA credentials...');
+          toast.success('MFA verification successful!');
           
-          // Close modals
-          setShowMfaSetup(false);
-          setShowMfaVerify(false);
-          setMfaCode('');
+          // Reset modal states
+          resetMfaModalStates();
           
-          toast.success('🎉 MFA verified successfully! Now saving your JIRA credentials...');
-          
-          // Continue with JIRA credential save
-          setTimeout(async () => {
+          // Continue with JIRA save after successful MFA
+          if (!isVerifyOnly) {
             await continueJiraSave();
-          }, 500);
+          } else {
+            // For verify-only, just close and refresh
+            setHasCredentials(true);
+            window.dispatchEvent(new Event('jira-credentials-changed'));
+            onClose();
+          }
         } else {
-          const errorMsg = data.error || 'Invalid code';
-          console.error('MFA Verification failed:', errorMsg);
-          toast.error(`❌ ${errorMsg}. Please try again from Settings.`);
-          
-          // Close MFA modals and return to settings window on failure
-          setShowMfaSetup(false);
-          setShowMfaVerify(false);
+          setCurrentStep('');
+          const backendError = data.error || 'Invalid MFA code';
+          console.log('🔐 MFA verification failed:', backendError);
+          toast.custom((t) => (
+            <div className={`bg-white border border-red-200 px-4 py-3 rounded-lg shadow-md max-w-md text-center ${t.visible ? 'animate-fade-in' : 'animate-fade-out'}`}>
+              <div className="text-red-600 font-medium">{backendError}. Please try again.</div>
+              <div className="text-gray-500 text-sm mt-1">If issues persist: Delete "TPM AI Assistant" from your authenticator app and scan the QR code again.</div>
+            </div>
+          ), {
+            duration: 4000,
+          });
           setMfaCode('');
         }
       } else {
-        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
-        console.error('MFA Verification HTTP error:', response.status, errorData);
-        toast.error(`Failed to verify MFA code: ${errorData.error || 'Server error'}. Please try again from Settings.`);
+        setCurrentStep('');
+        const errorData = await response.json().catch(() => ({}));
+        console.error('🔐 MFA verification failed:', response.status, errorData);
         
-        // Close MFA modals and return to settings window on HTTP error
-        setShowMfaSetup(false);
-        setShowMfaVerify(false);
+        // Only show error if we haven't shown one recently
+        if (!errorCooldown) {
+          const mfaError = createMFAError({
+            message: errorData.error || `MFA verification failed (${response.status})`,
+            isSetup: !isVerifyOnly
+          });
+          showErrorToast(mfaError);
+          setLastErrorType('mfa');
+          setErrorCooldown(true);
+        }
+        
         setMfaCode('');
       }
     } catch (error) {
+      setCurrentStep('');
       console.error('MFA verification error:', error);
-      toast.error('Connection error. Please try again from Settings.');
       
-      // Close MFA modals and return to settings window on connection error
-      setShowMfaSetup(false);
-      setShowMfaVerify(false);
+      // Only show error if we haven't shown one recently
+      if (!errorCooldown) {
+        if (error instanceof Error && error.name === 'AbortError') {
+          showErrorToast(createNetworkError('MFA verification timed out - check backend URL and port'));
+        } else {
+          showErrorToast(createNetworkError('MFA verification failed - check backend connection'));
+        }
+        setLastErrorType('network');
+        setErrorCooldown(true);
+      }
+      
       setMfaCode('');
+    } finally {
+      setIsCheckingMfa(false);
+      setTimeout(() => setCurrentStep(''), 500);
     }
   };
 
+
+
   const continueJiraSave = async () => {
+    if (isSaving) {
+      console.log('🔧 JIRA save already in progress, skipping');
+      return;
+    }
+
     try {
       setIsSaving(true);
-      const response = await fetch('/api/validate-jira', {
+      setCurrentStep('Saving JIRA credentials securely...');
+      console.log('🔐 Final JIRA save step: Testing connection and saving credentials');
+      
+      // Use the same target backend URL for consistency
+      const targetBackendUrl = getTargetBackendUrl();
+      console.log('🔗 Using target backend URL for JIRA save:', targetBackendUrl);
+
+      const response = await fetch(`${targetBackendUrl}/api/mfa/jira/test-connection`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Basic ${btoa(`${jiraUsernameValue}:${jiraTokenValue}`)}`,
         },
-        body: JSON.stringify({ username: jiraUsernameValue, token: jiraTokenValue }),
       });
 
       if (response.ok) {
         await setSecureJIRACredentials({ username: jiraUsernameValue, token: jiraTokenValue });
-        toast.success('JIRA credentials saved securely with MFA protection.');
+        setCurrentStep('JIRA credentials saved successfully!');
+        toast.success('JIRA credentials saved securely with MFA protection!');
         
         // Update states and close dialog
+        setHasCredentials(true);
         window.dispatchEvent(new Event('storage'));
+        window.dispatchEvent(new Event('websocket-settings-changed'));
         window.dispatchEvent(new Event('jira-credentials-changed'));
+        
         onClose();
       } else {
-        const errorData = await response.json();
+        setCurrentStep('');
+        const jiraError = await parseResponseError(response, 'JIRA validation');
         
-        // Clear MFA session when JIRA validation fails to require re-authentication
-        safeSessionStorage.removeItem('mfa_session_id');
-        safeSessionStorage.removeItem('mfa_session_user');
-        
-        // Reset MFA modal states to ensure clean state
+        // Clear MFA session since we need to start over
         resetMfaModalStates();
         
-        toast.error(`JIRA validation failed: ${errorData.error || 'Unknown error'}`);
-        toast('🔐 Please verify MFA again to retry JIRA credentials.');
+        // Only show error if we haven't shown one recently
+        if (!errorCooldown) {
+          showErrorToast(jiraError);
+          setLastErrorType('jira');
+          setErrorCooldown(true);
+        }
       }
     } catch (error) {
+      setCurrentStep('');
       console.error('JIRA save error:', error);
       
-      // Clear MFA session when JIRA validation has network/other errors to require re-authentication
-      safeSessionStorage.removeItem('mfa_session_id');
-      safeSessionStorage.removeItem('mfa_session_user');
-      
-      // Reset MFA modal states to ensure clean state
+      // Clear MFA session since we need to start over
       resetMfaModalStates();
       
-      toast.error('Failed to save JIRA credentials');
-      toast('🔐 Please verify MFA again to retry JIRA credentials.');
+      // Only show error if we haven't shown one recently
+      if (!errorCooldown) {
+        showErrorToast(createNetworkError('Failed to save JIRA credentials - check backend connection'));
+        setLastErrorType('network');
+        setErrorCooldown(true);
+      }
     } finally {
       setIsSaving(false);
     }
@@ -780,6 +1002,8 @@ export const SettingDialog: FC<Props> = ({ open, onClose }) => {
                       Clear JIRA Settings
                     </button>
                   </div>
+
+
                 </div>
               </div>
             </div>
@@ -787,7 +1011,7 @@ export const SettingDialog: FC<Props> = ({ open, onClose }) => {
         </div>
 
         {/* Footer */}
-                <div className="px-4 py-3 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800">
+        <div className="px-4 py-3 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800">
           <div className="flex justify-end items-center">
             <div className="flex gap-3">
               <button
@@ -799,17 +1023,19 @@ export const SettingDialog: FC<Props> = ({ open, onClose }) => {
               </button>
               <button
                 type="button"
-                                      className="px-6 py-2 rounded-lg text-white bg-gradient-to-r from-[#76B900] to-[#6AA600] hover:from-[#6AA600] hover:to-[#5E9400] transition-all shadow-sm hover:shadow-md disabled:opacity-50"
+                className="px-6 py-2 rounded-lg text-white bg-gradient-to-r from-[#76B900] to-[#6AA600] hover:from-[#6AA600] hover:to-[#5E9400] transition-all shadow-sm hover:shadow-md disabled:opacity-50"
                 onClick={handleSave}
-                disabled={isSaving}
+                disabled={isSaving || isValidatingJira || isCheckingMfa}
               >
-                {isSaving ? (
+                {(isSaving || isValidatingJira || isCheckingMfa) ? (
                   <span className="flex items-center space-x-2">
                     <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                    <span>{t('Saving...')}</span>
+                    <span>
+                      {currentStep || (isValidatingJira && 'Validating...') || (isCheckingMfa && 'Verifying...') || (isSaving && 'Saving...')}
+                    </span>
                   </span>
                 ) : (
-                                  <span>{t('Save')}</span>
+                  <span>{t('Save')}</span>
                 )}
               </button>
             </div>

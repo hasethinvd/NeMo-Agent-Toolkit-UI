@@ -62,7 +62,7 @@ const Home = (props: any) => {
     initialState,
   });
 
-  let workflow =  'AIQ TPM';
+  let workflow =  'NAT Toolkit';
 
   const {
     state: {
@@ -199,6 +199,22 @@ const Home = (props: any) => {
     const showChatbar = safeSessionStorage.getItem('showChatbar');
     if (showChatbar) {
       dispatch({ field: 'showChatbar', value: showChatbar === 'true' });
+    }
+
+    // Load URL settings from sessionStorage
+    const storedChatURL = safeSessionStorage.getItem('chatCompletionURL');
+    if (storedChatURL) {
+      dispatch({ field: 'chatCompletionURL', value: storedChatURL });
+    }
+
+    const storedWebSocketURL = safeSessionStorage.getItem('webSocketURL');
+    if (storedWebSocketURL) {
+      dispatch({ field: 'webSocketURL', value: storedWebSocketURL });
+    }
+
+    const storedWebSocketSchema = safeSessionStorage.getItem('webSocketSchema');
+    if (storedWebSocketSchema) {
+      dispatch({ field: 'webSocketSchema', value: storedWebSocketSchema });
     }
 
     const folders = safeSessionStorage.getItem('folders');
