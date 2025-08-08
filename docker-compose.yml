@@ -1,40 +1,45 @@
 version: '3.8'
 
 services:
-  ui:
-    build: .
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        # Build-time environment variables (can be overridden at runtime)
+        NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-}
+        NEXT_PUBLIC_API_PROTOCOL: ${NEXT_PUBLIC_API_PROTOCOL:-https}
+        NEXT_PUBLIC_API_HOST: ${NEXT_PUBLIC_API_HOST:-localhost}
+        NEXT_PUBLIC_API_PORT: ${NEXT_PUBLIC_API_PORT:-8080}
+        NEXT_PUBLIC_HTTP_CHAT_COMPLETION_URL: ${NEXT_PUBLIC_HTTP_CHAT_COMPLETION_URL:-}
+        NEXT_PUBLIC_WS_CHAT_COMPLETION_URL: ${NEXT_PUBLIC_WS_CHAT_COMPLETION_URL:-}
+        NEXT_PUBLIC_WEB_SOCKET_DEFAULT_ON: ${NEXT_PUBLIC_WEB_SOCKET_DEFAULT_ON:-true}
+        NEXT_PUBLIC_DOCS_URL: ${NEXT_PUBLIC_DOCS_URL:-}
+    container_name: tpm-frontend
     ports:
       - "3000:3000"
     environment:
-      # Backend configuration - adjust these based on your backend setup
-      - NEXT_PUBLIC_API_PROTOCOL=${API_PROTOCOL:-https}
-      - NEXT_PUBLIC_API_HOST=${API_HOST:-host.docker.internal}
-      - NEXT_PUBLIC_API_PORT=${API_PORT:-8080}
-      
-      # Optional: Direct URL override
-      # - NEXT_PUBLIC_API_BASE_URL=https://your-backend-host:8080
-      
-      # WebSocket configuration (automatically derived from above)
-      - NEXT_PUBLIC_HTTP_CHAT_COMPLETION_URL=${API_PROTOCOL:-https}://${API_HOST:-host.docker.internal}:${API_PORT:-8080}/chat/stream
-      - NEXT_PUBLIC_WS_CHAT_COMPLETION_URL=${WS_PROTOCOL:-wss}://${API_HOST:-host.docker.internal}:${API_PORT:-8080}/websocket
-      - NEXT_PUBLIC_WEB_SOCKET_DEFAULT_ON=true
-      
-      # TLS settings for HTTPS backends
-      - NODE_TLS_REJECT_UNAUTHORIZED=0
+      # Runtime environment variables (configurable per deployment)
+      - NEXT_PUBLIC_API_BASE_URL=${NEXT_PUBLIC_API_BASE_URL:-}
+      - NEXT_PUBLIC_API_HOST=${NEXT_PUBLIC_API_HOST:-localhost}
+      - NEXT_PUBLIC_API_PROTOCOL=${NEXT_PUBLIC_API_PROTOCOL:-https}
+      - NEXT_PUBLIC_API_PORT=${NEXT_PUBLIC_API_PORT:-8080}
+      - NEXT_PUBLIC_HTTP_CHAT_COMPLETION_URL=${NEXT_PUBLIC_HTTP_CHAT_COMPLETION_URL:-}
+      - NEXT_PUBLIC_WS_CHAT_COMPLETION_URL=${NEXT_PUBLIC_WS_CHAT_COMPLETION_URL:-}
+      - NEXT_PUBLIC_WEB_SOCKET_DEFAULT_ON=${NEXT_PUBLIC_WEB_SOCKET_DEFAULT_ON:-true}
+      - NEXT_PUBLIC_DOCS_URL=${NEXT_PUBLIC_DOCS_URL:-}
+      # Disable SSL verification for development (allows self-signed certs)
+      - NODE_TLS_REJECT_UNAUTHORIZED=${NODE_TLS_REJECT_UNAUTHORIZED:-0}
+      # Server-side API communication (container-to-container communication in Docker)
+      - INTERNAL_API_HOST=${INTERNAL_API_HOST:-backend}
+      - INTERNAL_API_PROTOCOL=${INTERNAL_API_PROTOCOL:-https}
+      - INTERNAL_API_PORT=${INTERNAL_API_PORT:-8080}
     networks:
-      - app-network
+      - tpm-shared-network
+    hostname: tpm-frontend
+    restart: unless-stopped
 
 networks:
-  app-network:
-    driver: bridge
-
-# Example usage:
-# 
-# For HTTP backend on port 9090:
-# API_PROTOCOL=http API_PORT=9090 WS_PROTOCOL=ws docker-compose up
-#
-# For HTTPS backend on port 8080:
-# API_PROTOCOL=https API_PORT=8080 WS_PROTOCOL=wss docker-compose up
-#
-# For custom backend host:
-# API_HOST=192.168.1.100 API_PORT=8080 docker-compose up 
+  tpm-shared-network:
+    external: true
+    name: tpm-shared-network

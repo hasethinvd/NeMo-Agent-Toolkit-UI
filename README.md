@@ -1,9 +1,9 @@
 # AIQ Toolkit - UI
 
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![AIQ Toolkit](https://img.shields.io/badge/AIQ Toolkit-Frontend-green)](https://github.com/NVIDIA/AIQ Toolkit)
+[![AIQ Toolkit](https://img.shields.io/badge/AIQToolkit-Frontend-green)](https://github.com/NVIDIA/AIQToolkit/tree/main)
 
-This is the official frontend user interface component for [AIQ Toolkit](https://github.com/NVIDIA/AIQ Toolkit), an open-source library for building AI agents and workflows.
+This is the official frontend user interface component for [AIQ Toolkit](https://github.com/NVIDIA/AIQToolkit/tree/main), an open-source library for building AI agents and workflows.
 
 This project builds upon the work of:
 - [chatbot-ui](https://github.com/mckaywrigley/chatbot-ui) by Mckay Wrigley
@@ -62,7 +62,7 @@ The UI implements several security utilities for secure API communication:
 ## Getting Started
 
 ### Prerequisites
-- [AIQ Toolkit](https://github.com/NVIDIA/AIQ Toolkit) installed and configured
+- [AIQ Toolkit](https://github.com/NVIDIA/AIQToolkit/tree/main) installed and configured
 - Git
 - Node.js (v18 or higher)
 - npm or Docker
@@ -71,8 +71,8 @@ The UI implements several security utilities for secure API communication:
 
 Clone the repository:
 ```bash
-git clone git@github.com:NVIDIA/AIQ Toolkit-UI.git
-cd AIQ Toolkit-UI
+git clone git@github.com:NVIDIA/AIQToolkit.git
+cd AIQToolkit
 ```
 
 Install dependencies:
@@ -231,8 +231,8 @@ When JIRA credentials are configured, MFA is automatically set up:
 ### Simple Calculator Example
 
 #### Setup and Configuration
-1. Set up [AIQ Toolkit](https://github.com/NVIDIA/AIQ Toolkit/blob/main/docs/source/1_intro/getting_started.md) 
-2. Start workflow by following the [Simple Calculator Example](https://github.com/NVIDIA/AIQ Toolkit/blob/main/examples/simple_calculator/README.md)
+1. Set up [AIQ Toolkit Get Started ](https://github.com/NVIDIA/AIQToolkit/blob/main/docs/source/intro/get-started.md)
+2. Start workflow by following the [Simple Calculator Example](https://github.com/NVIDIA/AIQToolkit/blob/main/examples/simple_calculator/README.md)
 ```bash
 aiq serve --config_file=examples/simple_calculator/configs/config.yml
 ```
@@ -245,38 +245,10 @@ Is 4 + 4 greater than the current hour of the day?
 
 ![AIQ Toolkit Web UI Workflow Result](public/screenshots/ui_generate_example.png)
 
-### Human In The Loop (HITL) Example
-
-#### Setup and Configuration
-1. Set up [AIQ Toolkit](https://github.com/NVIDIA/AIQ Toolkit/blob/main/docs/source/1_intro/getting_started.md) 
-2. Start workflow by following the [HITL Example](https://github.com/NVIDIA/AIQ Toolkit/blob/main/examples/simple_human_in_the_loop/README.md)
-```bash
-aiq serve --config_file=examples/simple_human_in_the_loop/configs/config.yml
-```
-
-#### Configuring HITL Settings
-Enable WebSocket mode in the settings panel for bidirectional real-time communication between the client and server.
-
-![AIQ Toolkit Web UI HITL Settings](public/screenshots/hitl_settings.png)
-
-#### Example Conversation
-1. Send the following prompt:
-```
-Can you process my input and display the result for the given prompt: How are you today?
-```
-
-2. Enter your response when prompted:
-
-![AIQ Toolkit Web UI HITL Prompt](public/screenshots/hitl_prompt.png)
-
-3. Monitor the result:
-
-![AIQ Toolkit Web UI HITL Prompt](public/screenshots/hitl_result.png)
-
 ## API Integration
 
 ### Server Communication
-The UI supports both HTTP requests (OpenAI compatible) and WebSocket connections for server communication. For detailed information about WebSocket messaging integration, please refer to the [WebSocket Documentation](https://github.com/NVIDIA/AIQ Toolkit/blob/main/docs/5_advanced/websockets.md) in the AIQ Toolkit documentation.
+The UI supports both HTTP requests (OpenAI compatible) and WebSocket connections for server communication. For detailed information about WebSocket messaging integration, please refer to the [WebSocket Documentation](https://github.com/NVIDIA/AIQToolkit/blob/main/docs/source/references/websockets.md) in the AIQ Toolkit documentation.
 
 ### Secure API Communication
 The UI includes specialized utilities for secure communication:

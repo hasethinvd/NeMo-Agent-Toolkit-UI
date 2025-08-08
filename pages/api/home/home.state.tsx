@@ -2,6 +2,7 @@ import { Conversation, Message } from '@/types/chat';
 import { FolderInterface } from '@/types/folder';
 import { t } from 'i18next';
 import { getApiUrl } from '@/utils/app/api-config';
+import { env } from 'next-runtime-env';
 
 export interface HomeInitialState {
   loading: boolean;
@@ -44,13 +45,16 @@ export const initialState: HomeInitialState = {
   messageError: false,
   searchTerm: '',
   chatHistory: process?.env?.NEXT_PUBLIC_CHAT_HISTORY_DEFAULT_ON === 'true' || false,
-  chatCompletionURL: process?.env?.NEXT_PUBLIC_HTTP_CHAT_COMPLETION_URL || getApiUrl('/chat/stream'),
+  // Default to staging chat completion URL if no env override is provided
+  chatCompletionURL:
+    process?.env?.NEXT_PUBLIC_HTTP_CHAT_COMPLETION_URL ||
+    'https://tpmjira-tpm-jira-aiq.stg.astra.nvidia.com/chat/stream',
   webSocketMode: process?.env?.NEXT_PUBLIC_WEB_SOCKET_DEFAULT_ON === 'true' || false,
   webSocketConnected: false,
-  webSocketURL: process?.env?.NEXT_PUBLIC_WEBSOCKET_CHAT_COMPLETION_URL || getApiUrl('/websocket').replace('https://', 'wss://').replace('http://', 'ws://'),
+      webSocketURL: process?.env?.NEXT_PUBLIC_WS_CHAT_COMPLETION_URL || 'wss://tpmjira-tpm-jira-aiq.stg.astra.nvidia.com/websocket',
   webSocketSchema: 'chat_stream',
   webSocketSchemas: ['chat_stream', 'chat', 'generate_stream', 'generate'],
-  enableIntermediateSteps: process?.env?.NEXT_PUBLIC_ENABLE_INTERMEDIATE_STEPS ? process.env.NEXT_PUBLIC_ENABLE_INTERMEDIATE_STEPS === 'true' : true,
+  enableIntermediateSteps: env('NEXT_PUBLIC_ENABLE_INTERMEDIATE_STEPS') === 'true' || process?.env?.NEXT_PUBLIC_ENABLE_INTERMEDIATE_STEPS === 'true' ? true : false,
   expandIntermediateSteps: false,
   intermediateStepOverride: true,
   autoScroll: true,
