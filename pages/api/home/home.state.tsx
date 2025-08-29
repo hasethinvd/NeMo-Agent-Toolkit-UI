@@ -48,10 +48,10 @@ export const initialState: HomeInitialState = {
   // Default to staging chat completion URL if no env override is provided
   chatCompletionURL:
     process?.env?.NEXT_PUBLIC_HTTP_CHAT_COMPLETION_URL ||
-    'https://tpmjira-tpm-jira-aiq.stg.astra.nvidia.com/chat/stream',
+    'https://tpm-nat.prd.astra.nvidia.com/chat/stream',
   webSocketMode: process?.env?.NEXT_PUBLIC_WEB_SOCKET_DEFAULT_ON === 'true' || false,
   webSocketConnected: false,
-      webSocketURL: process?.env?.NEXT_PUBLIC_WS_CHAT_COMPLETION_URL || 'wss://tpmjira-tpm-jira-aiq.stg.astra.nvidia.com/websocket',
+      webSocketURL: process?.env?.NEXT_PUBLIC_WS_CHAT_COMPLETION_URL || 'wss://tpm-nat.prd.astra.nvidia.com/websocket',
   webSocketSchema: 'chat_stream',
   webSocketSchemas: ['chat_stream', 'chat', 'generate_stream', 'generate'],
   enableIntermediateSteps: env('NEXT_PUBLIC_ENABLE_INTERMEDIATE_STEPS') === 'true' || process?.env?.NEXT_PUBLIC_ENABLE_INTERMEDIATE_STEPS === 'true' ? true : false,

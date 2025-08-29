@@ -1,14 +1,14 @@
 # Staging Backend Configuration Guide
 
 This guide shows how to configure your frontend to connect to the staging backend at:
-**https://tpmjira-tpm-jira-aiq.stg.astra.nvidia.com**
+**https://tpm-nat.prd.astra.nvidia.com**
 
 ## 🚀 Quick Start
 
 ### Option 1: Use the Staging Script (Recommended)
 ```bash
-cd tpm-enterprise-ui
-npm run dev:staging
+cd ai-query-engine-tpm
+npm run dev:prd
 ```
 
 ### Option 2: Create .env.local file
@@ -16,12 +16,12 @@ Create `tpm-enterprise-ui/.env.local` with:
 
 ```bash
 # Staging Backend Configuration (NO PORTS NEEDED!)
-NEXT_PUBLIC_API_BASE_URL=https://tpmjira-tpm-jira-aiq.stg.astra.nvidia.com
-NEXT_PUBLIC_HTTP_CHAT_COMPLETION_URL=https://tpmjira-tpm-jira-aiq.stg.astra.nvidia.com/chat/stream
-NEXT_PUBLIC_WS_CHAT_COMPLETION_URL=wss://tpmjira-tpm-jira-aiq.stg.astra.nvidia.com/websocket
+NEXT_PUBLIC_API_BASE_URL=https://tpm-nat.prd.astra.nvidia.com
+NEXT_PUBLIC_HTTP_CHAT_COMPLETION_URL=https://tpm-nat.prd.astra.nvidia.com/chat/stream
+NEXT_PUBLIC_WS_CHAT_COMPLETION_URL=wss://tpm-nat.prd.astra.nvidia.com/websocket
 NEXT_PUBLIC_WEB_SOCKET_DEFAULT_ON=true
 NODE_TLS_REJECT_UNAUTHORIZED=0
-INTERNAL_API_HOST=tpmjira-tpm-jira-aiq.stg.astra.nvidia.com
+INTERNAL_API_HOST=tpm-nat.prd.astra.nvidia.com
 INTERNAL_API_PROTOCOL=https
 INTERNAL_API_PORT=443
 ```
@@ -31,12 +31,12 @@ Then run: `npm run dev`
 ### Option 3: Docker with Environment Variables
 ```bash
 cd tpm-enterprise-ui
-export NEXT_PUBLIC_API_BASE_URL=https://tpmjira-tpm-jira-aiq.stg.astra.nvidia.com
-export NEXT_PUBLIC_HTTP_CHAT_COMPLETION_URL=https://tpmjira-tpm-jira-aiq.stg.astra.nvidia.com/chat/stream
-export NEXT_PUBLIC_WS_CHAT_COMPLETION_URL=wss://tpmjira-tpm-jira-aiq.stg.astra.nvidia.com/websocket
+export NEXT_PUBLIC_API_BASE_URL=https://tpm-nat.prd.astra.nvidia.com
+export NEXT_PUBLIC_HTTP_CHAT_COMPLETION_URL=https://tpm-nat.prd.astra.nvidia.com/chat/stream
+export NEXT_PUBLIC_WS_CHAT_COMPLETION_URL=wss://tpm-nat.prd.astra.nvidia.com/websocket
 export NEXT_PUBLIC_WEB_SOCKET_DEFAULT_ON=true
 export NODE_TLS_REJECT_UNAUTHORIZED=0
-export INTERNAL_API_HOST=tpmjira-tpm-jira-aiq.stg.astra.nvidia.com
+export INTERNAL_API_HOST=tpm-nat.prd.astra.nvidia.com
 export INTERNAL_API_PROTOCOL=https
 export INTERNAL_API_PORT=443
 
@@ -47,14 +47,14 @@ docker-compose up --build
 
 After starting with any of the above methods, your frontend settings should show:
 
-- **HTTP/HTTPS URL for Chat Completion**: `https://tpmjira-tpm-jira-aiq.stg.astra.nvidia.com/chat/stream`
-- **WebSocket URL for Chat Completion**: `wss://tpmjira-tpm-jira-aiq.stg.astra.nvidia.com/websocket`
+- **HTTP/HTTPS URL for Chat Completion**: `https://tpm-nat.prd.astra.nvidia.com/chat/stream`
+- **WebSocket URL for Chat Completion**: `wss://tpm-nat.prd.astra.nvidia.com/websocket`
 
 **NO MORE LOCALHOST URLs!** 🎯
 
 ## 🔧 Key Changes Made
 
-1. ✅ Added `dev:staging` script with complete URLs (no ports)
+1. ✅ Added `dev:prd` script with complete URLs (no ports)
 2. ✅ Updated Docker Compose to support the staging environment variables
 3. ✅ Configured both HTTP and WebSocket URLs to point to staging backend
 4. ✅ Set proper SSL and internal host configurations

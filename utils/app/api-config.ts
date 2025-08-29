@@ -6,7 +6,7 @@ export function getApiBaseUrl(): string {
   }
   
   // Default to staging backend - no more localhost!
-  return 'https://tpmjira-tpm-jira-aiq.stg.astra.nvidia.com';
+  return 'https://tpm-nat.prd.astra.nvidia.com';
 }
 
 // Get the full API URL for a specific endpoint

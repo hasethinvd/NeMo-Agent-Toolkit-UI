@@ -9,7 +9,7 @@
     "dev:prod-ssl": "HTTPS=true SSL_CRT_FILE=../../certs/prod.crt SSL_KEY_FILE=../../certs/prod.key next dev --experimental-https",
     "dev:flexible": "./scripts/start-ui.sh",
     "dev:local": "NEXT_PUBLIC_API_BASE_URL=https://localhost:8080 NODE_TLS_REJECT_UNAUTHORIZED=0 next dev",
-    "dev:staging": "NEXT_PUBLIC_API_BASE_URL=https://tpmjira-tpm-jira-aiq.stg.astra.nvidia.com NEXT_PUBLIC_HTTP_CHAT_COMPLETION_URL=https://tpmjira-tpm-jira-aiq.stg.astra.nvidia.com/chat/stream NEXT_PUBLIC_WS_CHAT_COMPLETION_URL=wss://tpmjira-tpm-jira-aiq.stg.astra.nvidia.com/websocket NEXT_PUBLIC_WEB_SOCKET_DEFAULT_ON=true NODE_TLS_REJECT_UNAUTHORIZED=0 next dev",
+    "dev:prd": "NEXT_PUBLIC_API_BASE_URL=https://tpm-nat.prd.astra.nvidia.com NEXT_PUBLIC_HTTP_CHAT_COMPLETION_URL=https://tpm-nat.prd.astra.nvidia.com/chat/stream NEXT_PUBLIC_WS_CHAT_COMPLETION_URL=wss://tpm-nat.prd.astra.nvidia.com/websocket NEXT_PUBLIC_WEB_SOCKET_DEFAULT_ON=true NODE_TLS_REJECT_UNAUTHORIZED=0 next dev",
     "build": "next build",
     "start": "next start",
     "start:https": "HTTPS=true SSL_CRT_FILE=../../certs/prod.crt SSL_KEY_FILE=../../certs/prod.key next start --experimental-https",
