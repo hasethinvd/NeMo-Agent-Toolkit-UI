@@ -25,7 +25,92 @@ let discoveredBackendUrl: string | null = null;
 let discoveryPromise: Promise<string> | null = null;
 
 /**
- * Discover backend URL by trying common ports
+ * Read backend configuration from various sources intelligently
+ */
+async function readBackendConfig(): Promise<{ port: number; protocol: string; host: string }> {
+  // 1. Check environment variables first (highest priority)
+  const envPort = process.env.NEXT_PUBLIC_BACKEND_PORT || process.env.PORT;
+  const envProtocol = process.env.NEXT_PUBLIC_BACKEND_PROTOCOL || 'http';
+  const envHost = process.env.NEXT_PUBLIC_BACKEND_HOST || 'localhost';
+  
+  if (envPort) {
+    console.log('📋 Using backend config from environment:', { port: envPort, protocol: envProtocol, host: envHost });
+    return {
+      port: parseInt(envPort),
+      protocol: envProtocol,
+      host: envHost
+    };
+  }
+
+  // 2. Try to read config.yml file content (if available via static file)
+  try {
+    if (typeof window !== 'undefined') {
+      // Try to fetch the config file directly (works if served as static file)
+      const configResponse = await fetch('/configs/config.yml', {
+        method: 'GET',
+        signal: AbortSignal.timeout(1000)
+      });
+      
+      if (configResponse.ok) {
+        const configText = await configResponse.text();
+        
+        // Parse YAML-like content to extract port
+        const portMatch = configText.match(/port:\s*\$\{PORT:-(\d+)\}/);
+        const hostMatch = configText.match(/host:\s*["']([^"']+)["']/);
+        const sslMatch = configText.match(/ssl_cert_file:\s*(.+)/);
+        
+        if (portMatch) {
+          const port = parseInt(portMatch[1]);
+          const host = hostMatch ? hostMatch[1] : 'localhost';
+          const protocol = sslMatch && sslMatch[1] !== 'null' ? 'https' : 'http';
+          
+          console.log('📋 Backend config read from config.yml:', { port, protocol, host });
+          return { port, protocol, host };
+        }
+      }
+    }
+  } catch (error) {
+    console.log('📋 Could not read config.yml file');
+  }
+
+  // 3. Try to get config from running backend on common ports
+  try {
+    const tryPorts = [8088, 8081, 8080, 8000]; // Put 8088 first since user mentioned it
+    for (const port of tryPorts) {
+      try {
+        const healthUrl = `http://localhost:${port}/health`;
+        const response = await fetch(healthUrl, { 
+          method: 'GET',
+          signal: AbortSignal.timeout(800)
+        });
+        
+        if (response.ok) {
+          console.log('📋 Found running backend at port:', port);
+          return {
+            port: port,
+            protocol: 'http', // Start with HTTP, can upgrade to HTTPS if needed
+            host: 'localhost'
+          };
+        }
+      } catch (error) {
+        // Continue to next port
+      }
+    }
+  } catch (error) {
+    console.log('📋 Could not detect running backend');
+  }
+
+  // 4. Fallback to intelligent defaults
+  console.log('📋 Using intelligent default backend config');
+  return {
+    port: 8081, // Most common default
+    protocol: 'http', 
+    host: 'localhost'
+  };
+}
+
+/**
+ * Discover backend URL by reading config intelligently
  */
 async function discoverBackendUrl(): Promise<string> {
   if (discoveredBackendUrl) {
@@ -37,47 +122,82 @@ async function discoverBackendUrl(): Promise<string> {
   }
 
   discoveryPromise = (async () => {
-    // Common ports to try for local development
-    const commonPorts = [8081, 8080, 8000, 9000, 3001];
-    const protocols = ['http', 'https'];
-    
-    console.log('🔍 Discovering backend URL...');
-    
-    for (const protocol of protocols) {
-      for (const port of commonPorts) {
-        const testUrl = `${protocol}://localhost:${port}`;
-        try {
-          // Test with a quick health check or jira config endpoint
-          const controller = new AbortController();
-          const timeoutId = setTimeout(() => controller.abort(), 1000); // 1 second timeout
+    try {
+      // Read configuration intelligently
+      const config = await readBackendConfig();
+      const testUrl = `${config.protocol}://${config.host}:${config.port}`;
+      
+      console.log('🔍 Testing backend URL from config:', testUrl);
+      
+      // Verify the backend is actually running
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 2000); // 2 second timeout
+        
+        const response = await fetch(`${testUrl}/api/jira/config`, {
+          method: 'GET',
+          signal: controller.signal,
+          headers: { 'Accept': 'application/json' }
+        });
+        
+        clearTimeout(timeoutId);
+        
+        if (response.ok) {
+          console.log('✅ Backend verified at:', testUrl);
+          discoveredBackendUrl = testUrl;
           
-          const response = await fetch(`${testUrl}/api/jira/config`, {
-            method: 'GET',
-            signal: controller.signal,
-            headers: { 'Accept': 'application/json' }
-          });
-          
-          clearTimeout(timeoutId);
-          
-          if (response.ok) {
-            console.log('Backend discovered at:', testUrl);
-            discoveredBackendUrl = testUrl;
-            
-            // Store in sessionStorage for future use
-            if (typeof window !== 'undefined') {
-              sessionStorage.setItem('discoveredBackendUrl', testUrl);
-            }
-            
-            return testUrl;
+          // Store in sessionStorage for future use
+          if (typeof window !== 'undefined') {
+            sessionStorage.setItem('discoveredBackendUrl', testUrl);
           }
-        } catch (error) {
-          // Continue trying other ports
+          
+          return testUrl;
+        }
+      } catch (error) {
+        console.warn(`⚠️ Backend not responding at ${testUrl}:`, error.message);
+      }
+      
+      // If configured URL doesn't work, fall back to port scanning
+      console.log('🔍 Config-based URL failed, trying port discovery...');
+      const fallbackPorts = [8088, 8081, 8080, 8000, 9000, 3001];
+      const protocols = ['http', 'https'];
+      
+      for (const protocol of protocols) {
+        for (const port of fallbackPorts) {
+          const fallbackUrl = `${protocol}://localhost:${port}`;
+          try {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 1000);
+            
+            const response = await fetch(`${fallbackUrl}/api/jira/config`, {
+              method: 'GET',
+              signal: controller.signal,
+              headers: { 'Accept': 'application/json' }
+            });
+            
+            clearTimeout(timeoutId);
+            
+            if (response.ok) {
+              console.log('✅ Backend discovered via fallback at:', fallbackUrl);
+              discoveredBackendUrl = fallbackUrl;
+              
+              if (typeof window !== 'undefined') {
+                sessionStorage.setItem('discoveredBackendUrl', fallbackUrl);
+              }
+              
+              return fallbackUrl;
+            }
+          } catch (error) {
+            // Continue trying other ports
+          }
         }
       }
+    } catch (error) {
+      console.error('Error in backend discovery:', error);
     }
     
-    // If discovery fails, fallback to default
-    console.warn('⚠️ Backend auto-discovery failed, using default');
+    // If all discovery fails, use intelligent default
+    console.warn('⚠️ Backend auto-discovery failed, using intelligent default');
     const fallback = process.env.NODE_ENV === 'development' 
       ? 'http://localhost:8081' 
       : getApiBaseUrl();
