@@ -1,5 +1,12 @@
 import { FC, useState, useEffect } from 'react';
 import toast from 'react-hot-toast';
+import { storeMFASession } from '@/utils/app/mfa-session';
+import { getBackendUrl } from '@/utils/app/api-config';
+import {
+  startMFAVerification,
+  endMFAVerification,
+  isMFAOperationInProgress
+} from '@/utils/app/mfa-state';
 
 interface Props {
   isOpen: boolean;
@@ -62,15 +69,29 @@ export const MFAVerificationModal: FC<Props> = ({
       return;
     }
 
+    // Check for race conditions for this specific user
+    if (isMFAOperationInProgress(userId)) {
+      toast.error('🔒 Another MFA operation is in progress. Please wait.');
+      return;
+    }
+
+    const operationId = startMFAVerification(userId);
+    if (!operationId) {
+      toast.error('🔒 Cannot start MFA verification - another operation is in progress.');
+      return;
+    }
+
     setIsVerifying(true);
     try {
-      const response = await fetch('/api/mfa', {
-        method: 'PUT',
+      // Use consistent backend URL and endpoint format
+      const backendUrl = getBackendUrl();
+      const response = await fetch(`${backendUrl}/api/mfa/verify`, {
+        method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-user-id': userId,
         },
         body: JSON.stringify({
+          user_id: userId,
           code: verificationCode,
           is_backup_code: isBackupCode,
         }),
@@ -80,6 +101,10 @@ export const MFAVerificationModal: FC<Props> = ({
         const data = await response.json();
         if (data.success) {
           toast.success('🎉 MFA verification successful!');
+          // Store session using unified session management
+          if (data.session_id) {
+            storeMFASession(data.session_id, userId);
+          }
           onSuccess(data.session_id);
           onClose();
         } else {
@@ -104,6 +129,7 @@ export const MFAVerificationModal: FC<Props> = ({
       toast.error('Failed to verify MFA code');
     } finally {
       setIsVerifying(false);
+      endMFAVerification(userId, operationId);
     }
   };
 

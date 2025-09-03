@@ -23,7 +23,7 @@ import {
 } from '@/utils/app/helper';
 import { throttle } from '@/utils/data/throttle';
 import { getSecureJIRACredentials } from '@/utils/app/crypto';
-import { shouldUseHeaderAuth } from '@/utils/app/api-config';
+import { shouldUseHeaderAuth, getBackendUrl } from '@/utils/app/api-config';
 import { ChatBody, Conversation, Message } from '@/types/chat';
 import HomeContext from '@/pages/api/home/home.context';
 import { ChatInput } from './ChatInput';
@@ -339,13 +339,13 @@ export const Chat = () => {
                 <div className="mb-2">
                   <strong>Step 1:</strong> Open{' '}
                   <a 
-                    href="https://localhost:8080/api/jira/config"
+                    href={`${getBackendUrl()}/api/jira/config`}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="text-blue-500 hover:text-blue-700 underline"
                     onClick={() => toast.dismiss(t.id)}
                   >
-                    https://localhost:8080/api/jira/config
+                    {`${getBackendUrl()}/api/jira/config`}
                   </a>
                 </div>
                 <div className="mb-1">

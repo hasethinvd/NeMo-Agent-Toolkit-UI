@@ -1,7 +1,28 @@
 import { FC, useState, useEffect } from 'react';
 import toast from 'react-hot-toast';
 import { getJIRACredentialStatus, getSecureJIRACredentials } from '../../utils/app/crypto';
-import { getBackendUrl } from '../../utils/app/api-config';
+import { getBackendUrl, getBackendUrlWithDiscovery } from '../../utils/app/api-config';
+import { 
+  storeMFASession, 
+  getMFASession, 
+  hasValidMFASession, 
+  clearMFASession,
+  validateMFASessionWithBackend
+} from '../../utils/app/mfa-session';
+import {
+  startMFASetup,
+  endMFASetup,
+  startMFAVerification,
+  endMFAVerification,
+  isMFAOperationInProgress
+} from '../../utils/app/mfa-state';
+import {
+  handleMFAError,
+  showMFASuccess,
+  MFAErrorType,
+  showMFAError,
+  MFA_SUCCESS_MESSAGES
+} from '../../utils/app/mfa-errors';
 
 interface MFAStatus {
   enabled: boolean;
@@ -74,37 +95,23 @@ export const MFASettings: FC<Props> = ({ className = '' }) => {
     }
     
     try {
-      // Use consistent backend URL that prioritizes UI settings over environment variables
-      const backendUrl = getBackendUrl();
+      // Use dynamic backend discovery for initial connection
+      const backendUrl = await getBackendUrlWithDiscovery();
+      console.log('🔍 Using discovered backend URL for MFA status:', backendUrl);
     
     const response = await fetch(`${backendUrl}/api/mfa/status?user_id=${userId}`);
       if (response.ok) {
         const data = await response.json();
         
-        // Check if we have a valid stored session
-        const storedSessionId = sessionStorage.getItem('mfa_session_id');
-        const storedSessionUser = sessionStorage.getItem('mfa_session_user');
-        
+        // Check if we have a valid stored session using unified session management
         let hasActiveSession = false;
-        if (storedSessionId && storedSessionUser === userId) {
+        if (hasValidMFASession(userId)) {
           try {
-            // Validate the stored session
-            const sessionResponse = await fetch(`/api/mfa/session/validate?session_id=${storedSessionId}&user_id=${userId}`);
-            if (sessionResponse.ok) {
-              const sessionData = await sessionResponse.json();
-              hasActiveSession = sessionData.valid;
-              
-              if (!hasActiveSession) {
-                // Clear invalid session data
-                sessionStorage.removeItem('mfa_session_id');
-                sessionStorage.removeItem('mfa_session_user');
-              }
-            }
+            // Validate the stored session with backend (uses consistent URL resolution)
+            hasActiveSession = await validateMFASessionWithBackend(undefined, userId);
           } catch (error) {
             console.error('Error validating session:', error);
-            // Clear invalid session data
-            sessionStorage.removeItem('mfa_session_id');
-            sessionStorage.removeItem('mfa_session_user');
+            hasActiveSession = false;
           }
         }
         
@@ -124,7 +131,19 @@ export const MFASettings: FC<Props> = ({ className = '' }) => {
 
   const handleSetupMFA = async () => {
     if (!userId) {
-      toast.error('⚠️ Please enter your JIRA username first to set up MFA.');
+      showMFAError(MFAErrorType.USER_NOT_FOUND);
+      return;
+    }
+
+    // Check for race conditions for this specific user
+    if (isMFAOperationInProgress(userId)) {
+      showMFAError(MFAErrorType.OPERATION_IN_PROGRESS);
+      return;
+    }
+
+    const operationId = startMFASetup(userId);
+    if (!operationId) {
+      showMFAError(MFAErrorType.OPERATION_IN_PROGRESS);
       return;
     }
     
@@ -132,8 +151,8 @@ export const MFASettings: FC<Props> = ({ className = '' }) => {
     try {
       console.log('🔐 Starting MFA setup...');
       
-      // Use consistent backend URL that prioritizes UI settings over environment variables
-      const backendUrl = getBackendUrl();
+      // Use dynamic backend discovery for MFA setup
+      const backendUrl = await getBackendUrlWithDiscovery();
       
       const response = await fetch(`${backendUrl}/api/mfa/setup`, {
         method: 'POST',
@@ -173,37 +192,50 @@ export const MFASettings: FC<Props> = ({ className = '' }) => {
           setShowSetup(true);
           
           if (isExisting) {
-            toast.success('🔐 Using your existing MFA setup. Enter a code from your authenticator app to verify.');
+            showMFASuccess('Using your existing MFA setup. Enter a code from your authenticator app to verify.', '🔐');
           } else {
-            toast.success('🔐 MFA setup initiated. Please scan the QR code with your authenticator app.');
+            showMFASuccess('MFA setup initiated. Please scan the QR code with your authenticator app.', '🔐');
           }
         } else {
           console.error('🔐 MFA setup failed:', data.error);
-          toast.error(data.error || 'Failed to setup MFA');
+          handleMFAError(data.error);
         }
       } else {
         const errorText = await response.text();
         console.error('🔐 MFA setup HTTP error:', response.status, errorText);
-        toast.error(`Failed to setup MFA (${response.status})`);
+        handleMFAError(errorText, response.status);
       }
     } catch (error) {
       console.error('🔐 MFA setup error:', error);
-      toast.error('Failed to setup MFA - Check console for details');
+      handleMFAError(error);
     } finally {
       setIsLoading(false);
+      endMFASetup(userId, operationId);
     }
   };
 
   const handleVerifySetup = async () => {
     if (!verificationCode || verificationCode.length !== 6) {
-      toast.error('Please enter a valid 6-digit code');
+      showMFAError(MFAErrorType.VALIDATION_ERROR);
+      return;
+    }
+
+    // Check for race conditions for this specific user
+    if (isMFAOperationInProgress(userId)) {
+      showMFAError(MFAErrorType.OPERATION_IN_PROGRESS);
+      return;
+    }
+
+    const operationId = startMFAVerification(userId);
+    if (!operationId) {
+      showMFAError(MFAErrorType.OPERATION_IN_PROGRESS);
       return;
     }
 
     setIsVerifying(true);
     try {
-      // Use consistent backend URL that prioritizes UI settings over environment variables
-      const backendUrl = getBackendUrl();
+      // Use dynamic backend discovery for MFA verification
+      const backendUrl = await getBackendUrlWithDiscovery();
       
       const response = await fetch(`${backendUrl}/api/mfa/verify`, {
         method: 'POST',
@@ -220,34 +252,30 @@ export const MFASettings: FC<Props> = ({ className = '' }) => {
       if (response.ok) {
         const data = await response.json();
         if (data.success) {
-          // Store the session ID for later use
+          // Store the session ID using unified session management
           if (data.session_id) {
-            sessionStorage.setItem('mfa_session_id', data.session_id);
-            sessionStorage.setItem('mfa_session_user', userId);
+            storeMFASession(data.session_id, userId);
           }
-          toast.success('🎉 MFA verification completed successfully!');
+          showMFASuccess(MFA_SUCCESS_MESSAGES.VERIFICATION_SUCCESS);
           setShowSetup(false);
           setSetupData(null);
           setVerificationCode('');
           await fetchMFAStatus();
         } else {
-          // Provide more helpful error messages
-          if (data.error?.includes('Invalid MFA code')) {
-            toast.error('❌ Invalid code. Please wait for a new code in your authenticator app and try again.');
-          } else {
-            toast.error(data.error || 'Verification failed. Please try again.');
-          }
+          // Use consistent error handling
+          handleMFAError(data.error);
         }
-      } else if (response.status === 429) {
-        toast.error('⏱️ Too many attempts. Please wait a moment and try again.');
       } else {
-        toast.error('Failed to verify MFA code. Please check your internet connection.');
+        // Handle HTTP errors consistently
+        const errorText = await response.text().catch(() => '');
+        handleMFAError(errorText, response.status);
       }
     } catch (error) {
       console.error('MFA verification error:', error);
-      toast.error('Connection error. Please check your internet connection and try again.');
+      handleMFAError(error);
     } finally {
       setIsVerifying(false);
+      endMFAVerification(userId, operationId);
     }
   };
 

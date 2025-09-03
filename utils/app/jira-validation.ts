@@ -54,7 +54,7 @@ export const validateJIRACredentials = async (
       // Parse the error response to determine the issue
       const errorData = await response.json().catch(() => ({}));
       
-      console.log('🔍 JIRA validation error details:', {
+      console.log('JIRA validation error details:', {
         status: response.status,
         errorData,
         backendStatus: errorData.backend_status
@@ -62,7 +62,6 @@ export const validateJIRACredentials = async (
       
       // Handle specific backend connectivity issues (more comprehensive detection)
       if (response.status === 500 && errorData.backend_status === 'unreachable') {
-        console.log('🔍 Detected backend unreachable error');
         return {
           isValid: false,
           error: createBackendError('JIRA validation - TPM backend server is not accessible')
@@ -71,7 +70,6 @@ export const validateJIRACredentials = async (
       
       // Handle gateway/proxy errors (backend not responding)
       if (response.status >= 502 && response.status <= 504) {
-        console.log('🔍 Detected gateway/proxy error');
         return {
           isValid: false,
           error: createBackendError('JIRA validation - TPM backend server is not accessible')
@@ -80,7 +78,6 @@ export const validateJIRACredentials = async (
       
       // Handle JIRA credential issues (only when backend responded)
       if (response.status === 401 && errorData.backend_status === 'failed') {
-        console.log('🔍 Detected JIRA credential error');
         return {
           isValid: false,
           error: createJIRAError({
@@ -92,7 +89,6 @@ export const validateJIRACredentials = async (
       }
       
       // Default to backend error for 500s, JIRA error for auth issues, generic for others
-      console.log('🔍 Unhandled error, defaulting based on status code');
       if (response.status >= 500) {
         return {
           isValid: false,

@@ -8,7 +8,18 @@ import SecurityDashboard from './SecurityDashboard';
 import { MFAVerifyModal } from './MFAVerifyModal';
 import { validateJIRACredentialsWithRetry } from '@/utils/app/jira-validation';
 import { showErrorToast, createMFAError, createNetworkError, createBackendError, parseResponseError } from '@/utils/app/error-handler';
-import { getBackendUrl } from '@/utils/app/api-config';
+import { getBackendUrl, getBackendUrlWithDiscovery } from '@/utils/app/api-config';
+import { 
+  storeMFASession, 
+  hasValidMFASession, 
+  clearMFASession,
+  validateMFASessionWithBackend
+} from '@/utils/app/mfa-session';
+import {
+  startMFAVerification,
+  endMFAVerification,
+  isMFAOperationInProgress
+} from '@/utils/app/mfa-state';
 
 
 interface Props {
@@ -117,18 +128,11 @@ export const SettingDialog: FC<Props> = ({ open, onClose }) => {
           }
         }
         
-        // Check MFA status using sessionStorage backend URL
-        // Get backend URL from sessionStorage or fallback to environment variable
-        const storedChatURL = safeSessionStorage.getItem('chatCompletionURL');
-        let backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'https://0.0.0.0:8000'; // use env var or fallback to 8000
-        
-        if (storedChatURL) {
-          // Extract base URL from stored chat completion URL
-          const url = new URL(storedChatURL);
-          backendUrl = `${url.protocol}//${url.host}`;
-        }
-        
+        // Check MFA status using dynamic backend discovery
         try {
+          const backendUrl = await getBackendUrlWithDiscovery();
+          console.log('🔍 Using discovered backend URL for MFA status:', backendUrl);
+          
           const mfaResponse = await fetch(`${backendUrl}/api/mfa/status?user_id=${userId}`, {
             method: 'GET',
             headers: {
@@ -433,30 +437,18 @@ export const SettingDialog: FC<Props> = ({ open, onClose }) => {
      }
   };
 
-  // Validate existing MFA session
+  // Validate existing MFA session using unified session management
   const validateMfaSession = async (backendUrl: string): Promise<boolean> => {
-    const storedSessionId = safeSessionStorage.getItem('mfa_session_id');
-    const storedSessionUser = safeSessionStorage.getItem('mfa_session_user');
-
-    if (!storedSessionId || storedSessionUser !== jiraUsernameValue) {
-      // No active session - require MFA verification
+    // Check if user has a valid session
+    if (!hasValidMFASession(jiraUsernameValue)) {
       return await requireMfaVerification();
     }
 
     try {
-      // Validate existing session
-      const response = await fetch(`${backendUrl}/api/mfa/session/validate?session_id=${storedSessionId}&user_id=${jiraUsernameValue}`);
+      // Validate existing session with backend (uses consistent URL resolution)
+      const isValid = await validateMFASessionWithBackend(undefined, jiraUsernameValue);
       
-      if (!response.ok) {
-        // Session expired
-        clearMfaSession();
-        return await requireMfaVerification();
-      }
-
-      const sessionData = await response.json();
-      if (!sessionData.valid) {
-        // Session invalid
-        clearMfaSession();
+      if (!isValid) {
         return await requireMfaVerification();
       }
 
@@ -464,7 +456,6 @@ export const SettingDialog: FC<Props> = ({ open, onClose }) => {
       return true;
     } catch (error) {
       console.error('Session validation error:', error);
-      clearMfaSession();
       return await requireMfaVerification();
     }
   };
@@ -480,10 +471,9 @@ export const SettingDialog: FC<Props> = ({ open, onClose }) => {
     return false; // Don't continue with save - wait for MFA verification
   };
 
-  // Clear MFA session data
+  // Clear MFA session data using unified session management
   const clearMfaSession = () => {
-    safeSessionStorage.removeItem('mfa_session_id');
-    safeSessionStorage.removeItem('mfa_session_user');
+    clearMFASession();
   };
 
   // Save application settings (non-JIRA)
@@ -650,36 +640,41 @@ export const SettingDialog: FC<Props> = ({ open, onClose }) => {
       return;
     }
 
-    // Prevent multiple simultaneous MFA checks
-    if (isCheckingMfa) {
-      console.log('🔧 MFA verification already in progress, skipping');
-      return;
-    }
-
-    const userId = isVerifyOnly ? mfaVerifyData?.username : mfaSetupData?.username;
-    if (!userId) {
+    // Get user ID first
+    const currentUserId = isVerifyOnly ? mfaVerifyData?.username : mfaSetupData?.username;
+    if (!currentUserId) {
       toast.error('❌ User information missing for MFA verification');
       return;
     }
 
+    // Prevent multiple simultaneous MFA checks for this user
+    if (isCheckingMfa || isMFAOperationInProgress(currentUserId)) {
+      console.log('🔧 MFA verification already in progress for user, skipping');
+      return;
+    }
+
+    const operationId = startMFAVerification(currentUserId);
+    if (!operationId) {
+      toast.error('🔒 Cannot start MFA verification - another operation is in progress.');
+      return;
+    }
+
     setCurrentStep('Verifying MFA code...');
-    console.log('🔐 MFA Verification starting for user:', userId);
+    console.log('🔐 MFA Verification starting for user:', currentUserId);
     setIsCheckingMfa(true);
 
     try {
-      // Use the same target backend URL as MFA setup
-      const targetBackendUrl = getTargetBackendUrl();
-      console.log('🔗 Using target backend URL for MFA verification:', targetBackendUrl);
-
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 second timeout
 
-      // Use the exact format expected by backend: user_id, code, is_backup_code
-      const response = await fetch(`${targetBackendUrl}/api/mfa/verify`, {
+      // Use consistent backend URL resolution
+      const backendUrl = getBackendUrl();
+      console.log('🔗 Using backend URL for MFA verification:', backendUrl);
+      const response = await fetch(`${backendUrl}/api/mfa/verify`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          user_id: userId,
+          user_id: currentUserId,
           code: mfaCode.trim(),
           is_backup_code: false
         }),
@@ -759,6 +754,7 @@ export const SettingDialog: FC<Props> = ({ open, onClose }) => {
       setMfaCode('');
     } finally {
       setIsCheckingMfa(false);
+      endMFAVerification(currentUserId, operationId);
       setTimeout(() => setCurrentStep(''), 500);
     }
   };
