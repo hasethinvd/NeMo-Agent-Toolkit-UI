@@ -640,15 +640,16 @@ export const SettingDialog: FC<Props> = ({ open, onClose }) => {
       return;
     }
 
-    // Prevent multiple simultaneous MFA checks for this user
-    if (isCheckingMfa || isMFAOperationInProgress(userId)) {
-      console.log('🔧 MFA verification already in progress for user, skipping');
-      return;
-    }
-
+    // Get user ID first
     const currentUserId = isVerifyOnly ? mfaVerifyData?.username : mfaSetupData?.username;
     if (!currentUserId) {
       toast.error('❌ User information missing for MFA verification');
+      return;
+    }
+
+    // Prevent multiple simultaneous MFA checks for this user
+    if (isCheckingMfa || isMFAOperationInProgress(currentUserId)) {
+      console.log('🔧 MFA verification already in progress for user, skipping');
       return;
     }
 
@@ -659,7 +660,7 @@ export const SettingDialog: FC<Props> = ({ open, onClose }) => {
     }
 
     setCurrentStep('Verifying MFA code...');
-    console.log('🔐 MFA Verification starting for user:', userId);
+    console.log('🔐 MFA Verification starting for user:', currentUserId);
     setIsCheckingMfa(true);
 
     try {
