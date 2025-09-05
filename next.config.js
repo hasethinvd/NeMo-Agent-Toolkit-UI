@@ -29,6 +29,21 @@ const nextConfig = {
     return [
     ]
   },
+  async headers() {
+    return [
+      {
+        source: "/(.*)", // applies to all routes
+        headers: [
+          {
+            key: "Content-Security-Policy",
+            // ⚠️ wide open CSP — allows all connections
+            value: "default-src * 'unsafe-inline' 'unsafe-eval' data: blob:; connect-src *; img-src * data: blob:; style-src * 'unsafe-inline'; script-src * 'unsafe-inline' 'unsafe-eval' *;",
+          },
+        ],
+      },
+    ];
+  },
+
 };
 
 module.exports = nextConfig;
