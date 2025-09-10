@@ -1,5 +1,5 @@
 import { NextApiRequest, NextApiResponse } from 'next';
-import { getApiUrl, shouldUseHeaderAuth } from '@/utils/app/api-config';
+import { getApiUrl } from '@/utils/app/api-config';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
@@ -13,14 +13,25 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
-    // Check backend configuration to determine auth method
+    // Check backend configuration to determine auth method (server-side compatible)
     let useHeaderAuth = true; // Default to header auth
     try {
-      useHeaderAuth = await shouldUseHeaderAuth();
-      console.log(`🔐 JIRA validation using ${useHeaderAuth ? 'header' : 'body'} auth method`);
+      // Server-side version: check environment variable first
+      if (process.env.NEXT_PUBLIC_JIRA_AUTH_METHOD) {
+        const envAuthMethod = process.env.NEXT_PUBLIC_JIRA_AUTH_METHOD.toLowerCase();
+        useHeaderAuth = envAuthMethod === 'header';
+        console.log(`🔐 Using auth method from environment: ${envAuthMethod}`);
+      } else {
+        // Default to header auth for server-side
+        useHeaderAuth = true;
+        console.log(`🔐 Using default server-side auth method: header`);
+      }
     } catch (error) {
       console.warn('🔐 Failed to determine auth method, defaulting to header auth:', error);
+      useHeaderAuth = true;
     }
+    
+    console.log(`🔐 JIRA validation using ${useHeaderAuth ? 'header' : 'body'} auth method`);
     
     // Use provided backend URL or fall back to configuration
     let backendUrl: string;

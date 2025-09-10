@@ -817,7 +817,16 @@ export const SettingDialog: FC<Props> = ({ open, onClose }) => {
       });
 
       if (response.ok) {
+        console.log('🔍 MFA Setup: Storing JIRA credentials after successful MFA verification');
         await setSecureJIRACredentials({ username: jiraUsernameValue, token: jiraTokenValue });
+        
+        // Verify credentials were stored
+        const storedDataJSON = sessionStorage.getItem('jira-credentials');
+        console.log('🔍 MFA Setup: Credentials storage verification:', {
+          hasStoredData: !!storedDataJSON,
+          storedDataLength: storedDataJSON?.length || 0
+        });
+        
         setCurrentStep('JIRA credentials saved successfully!');
         toast.success('JIRA credentials saved securely with MFA protection!');
         

@@ -665,10 +665,26 @@ export const Chat = () => {
           
           // Get encrypted credentials data for WebSocket request
           const storedDataJSON = sessionStorage.getItem('jira-credentials');
+          console.log('🔍 Chat: Checking for JIRA credentials in sessionStorage:', {
+            hasStoredData: !!storedDataJSON,
+            storedDataLength: storedDataJSON?.length || 0,
+            useHeaderAuth,
+            sessionStorageKeys: Object.keys(sessionStorage).filter(key => key.includes('jira') || key.includes('credential'))
+          });
+          
+          // Also check if credentials exist using the crypto utility
+          try {
+            const { getJIRACredentialStatus } = await import('@/utils/app/crypto');
+            const credentialStatus = getJIRACredentialStatus();
+            console.log('🔍 Chat: JIRA credential status from crypto utility:', credentialStatus);
+          } catch (error) {
+            console.log('🔍 Chat: Error checking credential status:', error);
+          }
+          
           let jiraCredentialsForWS: any = undefined;
 
-          if (storedDataJSON && !useHeaderAuth) {
-            // Only include credentials in body if not using header auth
+          if (storedDataJSON) {
+            // Include credentials in body for WebSocket (WebSocket doesn't support custom headers)
             try {
               const storedData = JSON.parse(storedDataJSON);
               // Check if credentials are expired before sending
@@ -680,6 +696,12 @@ export const Chat = () => {
                 const sessionKey = getCurrentSessionKey();
                 
                 if (sessionKey) {
+                  console.log('🔍 Chat: JIRA credentials loaded for WebSocket request:', {
+                    hasCredentials: true,
+                    authMethod: useHeaderAuth ? 'header' : 'body',
+                    note: 'WebSocket always uses body auth regardless of header setting'
+                  });
+                  
                   // Send encrypted data to server for decryption
                   jiraCredentialsForWS = { 
                     encrypted: JSON.stringify({
@@ -694,6 +716,8 @@ export const Chat = () => {
             } catch (error) {
               console.error('Error preparing encrypted JIRA credentials for WebSocket:', error);
             }
+          } else {
+            console.log('🔍 Chat: No JIRA credentials found in sessionStorage');
           }
 
           const wsMessage = {

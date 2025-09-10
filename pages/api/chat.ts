@@ -40,7 +40,7 @@ const handler = async (req: Request): Promise<Response> => {
   }
 
   try {    
-    let payload;
+    let payload: any;
     
     // Decrypt JIRA credentials if they're encrypted
     let decryptedJiraCredentials;
@@ -66,6 +66,14 @@ const handler = async (req: Request): Promise<Response> => {
         payload = {
           input_message: messages[messages.length - 1]?.content ?? ''
         };
+        
+        // Add JIRA credentials to payload if available
+        if (decryptedJiraCredentials) {
+          payload.jira_credentials = decryptedJiraCredentials;
+          console.log('🔑 Added JIRA credentials to generate payload');
+        } else {
+          console.log('🔑 No JIRA credentials to add to generate payload');
+        }
       } else {
         throw new Error('User message not found: messages array is empty or invalid.');
       }
@@ -85,12 +93,36 @@ const handler = async (req: Request): Promise<Response> => {
         stop: true,
         additionalProp1: {}
       };
+      
+      // Add JIRA credentials to payload if available
+      if (decryptedJiraCredentials) {
+        payload.jira_credentials = decryptedJiraCredentials;
+        console.log('🔑 Added JIRA credentials to chat payload');
+      } else {
+        console.log('🔑 No JIRA credentials to add to chat payload');
+      }
     }
 
     console.log('aiq - making request to', { url: chatCompletionURL });
 
-    // Check backend configuration to determine auth method
-    const useHeaderAuth = await shouldUseHeaderAuth();
+    // Check backend configuration to determine auth method (server-side compatible)
+    let useHeaderAuth = true; // Default to header auth
+    try {
+      // Server-side version: check environment variable first
+      if (process.env.NEXT_PUBLIC_JIRA_AUTH_METHOD) {
+        const envAuthMethod = process.env.NEXT_PUBLIC_JIRA_AUTH_METHOD.toLowerCase();
+        useHeaderAuth = envAuthMethod === 'header';
+        console.log(`🔐 Using auth method from environment: ${envAuthMethod}`);
+      } else {
+        // Default to header auth for server-side
+        useHeaderAuth = true;
+        console.log(`🔐 Using default server-side auth method: header`);
+      }
+    } catch (error) {
+      console.warn('🔐 Failed to determine auth method, defaulting to header auth:', error);
+      useHeaderAuth = true;
+    }
+    
     console.log(`🔐 Using ${useHeaderAuth ? 'header' : 'body'} auth method for JIRA credentials`);
 
     let authHeader = {};
