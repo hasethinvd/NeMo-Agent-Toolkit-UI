@@ -146,17 +146,33 @@ export const MFASettings: FC<Props> = ({ className = '' }) => {
       
       // Use consistent backend URL that prioritizes UI settings over environment variables
       const backendUrl = getBackendUrl();
+      console.log('🔍 MFA Setup - getBackendUrl() returned:', backendUrl);
+      console.log('🔍 MFA Setup - sessionStorage values:', {
+        discoveredBackendUrl: sessionStorage.getItem('discoveredBackendUrl'),
+        chatCompletionURL: sessionStorage.getItem('chatCompletionURL'),
+        backendUrl: sessionStorage.getItem('backendUrl')
+      });
+      
+      const setupRequestData = {
+        user_id: userId,
+        user_email: userEmail,
+        force_new: false
+      };
+      
+      console.log('🔐 MFA Setup Request:', {
+        backendUrl: `${backendUrl}/api/mfa/setup`,
+        userId,
+        userEmail,
+        forceNew: false,
+        timestamp: new Date().toISOString()
+      });
       
       const response = await fetch(`${backendUrl}/api/mfa/setup`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          user_id: userId,
-          user_email: userEmail,
-          force_new: false
-        }),
+        body: JSON.stringify(setupRequestData),
       });
 
       console.log('🔐 MFA setup response status:', response.status);
@@ -164,6 +180,13 @@ export const MFASettings: FC<Props> = ({ className = '' }) => {
       if (response.ok) {
         const data = await response.json();
         console.log('🔐 MFA setup response data:', data);
+        console.log('🔐 MFA setup details:', {
+          success: data.success,
+          hasQrCode: !!data.qr_code,
+          hasBackupCodes: !!data.backup_codes,
+          backupCodesCount: data.backup_codes?.length || 0,
+          isExisting: data.is_existing
+        });
         
         if (data.success) {
           // Ensure backup_codes is an array

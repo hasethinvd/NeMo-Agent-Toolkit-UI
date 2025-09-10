@@ -14,8 +14,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   try {
     // Check backend configuration to determine auth method
-    const useHeaderAuth = await shouldUseHeaderAuth();
-    console.log(`🔐 JIRA validation using ${useHeaderAuth ? 'header' : 'body'} auth method`);
+    let useHeaderAuth = true; // Default to header auth
+    try {
+      useHeaderAuth = await shouldUseHeaderAuth();
+      console.log(`🔐 JIRA validation using ${useHeaderAuth ? 'header' : 'body'} auth method`);
+    } catch (error) {
+      console.warn('🔐 Failed to determine auth method, defaulting to header auth:', error);
+    }
     
     // Use provided backend URL or fall back to configuration
     let backendUrl: string;

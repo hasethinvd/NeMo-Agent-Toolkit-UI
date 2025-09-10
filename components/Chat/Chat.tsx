@@ -24,6 +24,27 @@ import {
 import { throttle } from '@/utils/data/throttle';
 import { getSecureJIRACredentials } from '@/utils/app/crypto';
 import { shouldUseHeaderAuth, getBackendUrl } from '@/utils/app/api-config';
+
+// Fallback function in case shouldUseHeaderAuth is not available
+const fallbackShouldUseHeaderAuth = async (): Promise<boolean> => {
+  console.warn('🔐 shouldUseHeaderAuth not available, using fallback (header auth)');
+  return true; // Default to header auth
+};
+
+// Safe wrapper for shouldUseHeaderAuth
+const safeShouldUseHeaderAuth = async (): Promise<boolean> => {
+  if (typeof shouldUseHeaderAuth === 'function') {
+    try {
+      return await shouldUseHeaderAuth();
+    } catch (error) {
+      console.warn('🔐 shouldUseHeaderAuth failed, using fallback:', error);
+      return true;
+    }
+  } else {
+    console.warn('🔐 shouldUseHeaderAuth is not a function, using fallback');
+    return fallbackShouldUseHeaderAuth();
+  }
+};
 import { ChatBody, Conversation, Message } from '@/types/chat';
 import HomeContext from '@/pages/api/home/home.context';
 import { ChatInput } from './ChatInput';
@@ -113,7 +134,7 @@ export const Chat = () => {
     // console.log("User response:", userResponse);
     
     // Check backend configuration to determine auth method
-    const useHeaderAuth = await shouldUseHeaderAuth();
+    const useHeaderAuth = await safeShouldUseHeaderAuth();
     console.log(`🔐 WebSocket interaction using ${useHeaderAuth ? 'header' : 'body'} auth method`);
     
     // Get encrypted credentials data for WebSocket interaction
@@ -639,7 +660,7 @@ export const Chat = () => {
           }
           
           // Check backend configuration to determine auth method
-          const useHeaderAuth = await shouldUseHeaderAuth();
+          const useHeaderAuth = await safeShouldUseHeaderAuth();
           console.log(`🔐 WebSocket chat using ${useHeaderAuth ? 'header' : 'body'} auth method`);
           
           // Get encrypted credentials data for WebSocket request

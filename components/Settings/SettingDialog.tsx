@@ -359,14 +359,23 @@ export const SettingDialog: FC<Props> = ({ open, onClose }) => {
   };
 
   // Get backend URL from current settings - now using the imported centralized function
-  // but override with current UI state if user is actively editing
+  // Get the correct backend URL for MFA and API calls based on environment
   const getCurrentBackendUrl = (): string => {
-    if (chatCompletionEndPoint) {
-      const url = new URL(chatCompletionEndPoint);
-      return `${url.protocol}//${url.host}`;
+    // Check if we're in production environment (AI Factory)
+    if (typeof window !== 'undefined') {
+      const hostname = window.location.hostname;
+      // If running on production domain, use production backend
+      if (hostname.includes('tpm.prd.astra.nvidia.com') || hostname.includes('astra.nvidia.com')) {
+        return 'https://tpm-nat.prd.astra.nvidia.com';
+      }
+      // If running on localhost, use local backend
+      if (hostname.includes('localhost') || hostname.includes('127.0.0.1')) {
+        return 'http://localhost:8080';
+      }
     }
-    // Fall back to the centralized function for consistent behavior
-    return getBackendUrl();
+    
+    // Fallback to environment variable or production
+    return process.env.NEXT_PUBLIC_API_BASE_URL || 'https://tpm-nat.prd.astra.nvidia.com';
   };
 
 
@@ -491,7 +500,30 @@ export const SettingDialog: FC<Props> = ({ open, onClose }) => {
     safeSessionStorage.setItem('chatCompletionURL', chatCompletionEndPoint);
     safeSessionStorage.setItem('webSocketURL', webSocketEndPoint);
     safeSessionStorage.setItem('webSocketSchema', webSocketSchema);
-    safeSessionStorage.setItem('backendUrl', chatCompletionEndPoint.replace('/chat/stream', ''));
+    
+    // Determine the correct backend URL for MFA/API calls based on environment
+    const getBackendUrlForMFA = (): string => {
+      // Check if we're in production environment (AI Factory)
+      if (typeof window !== 'undefined') {
+        const hostname = window.location.hostname;
+        // If running on production domain, use production backend
+        if (hostname.includes('tpm.prd.astra.nvidia.com') || hostname.includes('astra.nvidia.com')) {
+          return 'https://tpm-nat.prd.astra.nvidia.com';
+        }
+        // If running on localhost, use local backend
+        if (hostname.includes('localhost') || hostname.includes('127.0.0.1')) {
+          return 'http://localhost:8080';
+        }
+      }
+      
+      // Fallback to environment variable or production
+      return process.env.NEXT_PUBLIC_API_BASE_URL || 'https://tpm-nat.prd.astra.nvidia.com';
+    };
+    
+    const backendUrlForMFA = getBackendUrlForMFA();
+    safeSessionStorage.setItem('backendUrl', backendUrlForMFA);
+    console.log('🔧 Settings: Storing backend URL for MFA/API calls:', backendUrlForMFA);
+    
     safeSessionStorage.setItem('expandIntermediateSteps', String(detailsToggle));
     safeSessionStorage.setItem('intermediateStepOverride', String(intermediateStepOverrideToggle));
     safeSessionStorage.setItem('enableIntermediateSteps', String(isIntermediateStepsEnabled));

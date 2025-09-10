@@ -218,13 +218,30 @@ export function getBackendUrl(): string {
     return getApiBaseUrl();
   }
   
-  // Second priority: Previously discovered backend URL
+  // Second priority: Explicit backend URL from sessionStorage (set by settings)
+  const storedBackendUrl = sessionStorage.getItem('backendUrl');
+  if (storedBackendUrl) {
+    return storedBackendUrl;
+  }
+  
+  // Third priority: Environment-based detection
+  const hostname = window.location.hostname;
+  // If running on production domain, use production backend
+  if (hostname.includes('tpm.prd.astra.nvidia.com') || hostname.includes('astra.nvidia.com')) {
+    return 'https://tpm-nat.prd.astra.nvidia.com';
+  }
+  // If running on localhost, use local backend
+  if (hostname.includes('localhost') || hostname.includes('127.0.0.1')) {
+    return 'http://localhost:8080';
+  }
+  
+  // Fourth priority: Previously discovered backend URL
   const storedDiscoveredUrl = sessionStorage.getItem('discoveredBackendUrl');
   if (storedDiscoveredUrl) {
     return storedDiscoveredUrl;
   }
   
-  // Third priority: Current chat completion URL from sessionStorage (UI settings)
+  // Fifth priority: Current chat completion URL from sessionStorage (UI settings)
   const storedChatURL = sessionStorage.getItem('chatCompletionURL');
   if (storedChatURL) {
     try {
@@ -235,13 +252,7 @@ export function getBackendUrl(): string {
     }
   }
   
-  // Fourth priority: Explicit backend URL from sessionStorage  
-  const storedBackendUrl = sessionStorage.getItem('backendUrl');
-  if (storedBackendUrl) {
-    return storedBackendUrl;
-  }
-  
-  // Fifth priority: Environment variable base URL
+  // Sixth priority: Environment variable base URL
   const envBackendUrl = process.env.NEXT_PUBLIC_BACKEND_URL;
   if (envBackendUrl) {
     return envBackendUrl;
