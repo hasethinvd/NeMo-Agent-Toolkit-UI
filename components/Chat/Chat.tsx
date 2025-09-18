@@ -24,6 +24,27 @@ import {
 import { throttle } from '@/utils/data/throttle';
 import { getSecureJIRACredentials } from '@/utils/app/crypto';
 import { shouldUseHeaderAuth, getBackendUrl } from '@/utils/app/api-config';
+
+// Fallback function in case shouldUseHeaderAuth is not available
+const fallbackShouldUseHeaderAuth = async (): Promise<boolean> => {
+  console.warn('🔐 shouldUseHeaderAuth not available, using fallback (header auth)');
+  return true; // Default to header auth
+};
+
+// Safe wrapper for shouldUseHeaderAuth
+const safeShouldUseHeaderAuth = async (): Promise<boolean> => {
+  if (typeof shouldUseHeaderAuth === 'function') {
+    try {
+      return await shouldUseHeaderAuth();
+    } catch (error) {
+      console.warn('🔐 shouldUseHeaderAuth failed, using fallback:', error);
+      return true;
+    }
+  } else {
+    console.warn('🔐 shouldUseHeaderAuth is not a function, using fallback');
+    return fallbackShouldUseHeaderAuth();
+  }
+};
 import { ChatBody, Conversation, Message } from '@/types/chat';
 import HomeContext from '@/pages/api/home/home.context';
 import { ChatInput } from './ChatInput';
@@ -113,7 +134,7 @@ export const Chat = () => {
     // console.log("User response:", userResponse);
     
     // Check backend configuration to determine auth method
-    const useHeaderAuth = await shouldUseHeaderAuth();
+    const useHeaderAuth = await safeShouldUseHeaderAuth();
     console.log(`🔐 WebSocket interaction using ${useHeaderAuth ? 'header' : 'body'} auth method`);
     
     // Get encrypted credentials data for WebSocket interaction
@@ -639,15 +660,31 @@ export const Chat = () => {
           }
           
           // Check backend configuration to determine auth method
-          const useHeaderAuth = await shouldUseHeaderAuth();
+          const useHeaderAuth = await safeShouldUseHeaderAuth();
           console.log(`🔐 WebSocket chat using ${useHeaderAuth ? 'header' : 'body'} auth method`);
           
           // Get encrypted credentials data for WebSocket request
           const storedDataJSON = sessionStorage.getItem('jira-credentials');
+          console.log('🔍 Chat: Checking for JIRA credentials in sessionStorage:', {
+            hasStoredData: !!storedDataJSON,
+            storedDataLength: storedDataJSON?.length || 0,
+            useHeaderAuth,
+            sessionStorageKeys: Object.keys(sessionStorage).filter(key => key.includes('jira') || key.includes('credential'))
+          });
+          
+          // Also check if credentials exist using the crypto utility
+          try {
+            const { getJIRACredentialStatus } = await import('@/utils/app/crypto');
+            const credentialStatus = getJIRACredentialStatus();
+            console.log('🔍 Chat: JIRA credential status from crypto utility:', credentialStatus);
+          } catch (error) {
+            console.log('🔍 Chat: Error checking credential status:', error);
+          }
+          
           let jiraCredentialsForWS: any = undefined;
 
-          if (storedDataJSON && !useHeaderAuth) {
-            // Only include credentials in body if not using header auth
+          if (storedDataJSON) {
+            // Include credentials in body for WebSocket (WebSocket doesn't support custom headers)
             try {
               const storedData = JSON.parse(storedDataJSON);
               // Check if credentials are expired before sending
@@ -659,6 +696,12 @@ export const Chat = () => {
                 const sessionKey = getCurrentSessionKey();
                 
                 if (sessionKey) {
+                  console.log('🔍 Chat: JIRA credentials loaded for WebSocket request:', {
+                    hasCredentials: true,
+                    authMethod: useHeaderAuth ? 'header' : 'body',
+                    note: 'WebSocket always uses body auth regardless of header setting'
+                  });
+                  
                   // Send encrypted data to server for decryption
                   jiraCredentialsForWS = { 
                     encrypted: JSON.stringify({
@@ -673,6 +716,8 @@ export const Chat = () => {
             } catch (error) {
               console.error('Error preparing encrypted JIRA credentials for WebSocket:', error);
             }
+          } else {
+            console.log('🔍 Chat: No JIRA credentials found in sessionStorage');
           }
 
           const wsMessage = {

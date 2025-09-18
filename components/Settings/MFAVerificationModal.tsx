@@ -85,6 +85,13 @@ export const MFAVerificationModal: FC<Props> = ({
     try {
       // Use consistent backend URL and endpoint format
       const backendUrl = getBackendUrl();
+      console.log('🔍 MFA Verification - getBackendUrl() returned:', backendUrl);
+      console.log('🔍 MFA Verification - sessionStorage values:', {
+        discoveredBackendUrl: sessionStorage.getItem('discoveredBackendUrl'),
+        chatCompletionURL: sessionStorage.getItem('chatCompletionURL'),
+        backendUrl: sessionStorage.getItem('backendUrl')
+      });
+      
       const response = await fetch(`${backendUrl}/api/mfa/verify`, {
         method: 'POST',
         headers: {
