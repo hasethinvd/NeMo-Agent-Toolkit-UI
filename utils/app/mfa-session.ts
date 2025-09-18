@@ -1,27 +1,13 @@
 /**
  * Unified MFA Session Management
  * Provides consistent session storage across all MFA components
+ * Storage type (localStorage vs sessionStorage) is configurable via backend config
  */
 
-// Safe session storage wrapper that works in both client and server environments
-const safeSessionStorage = {
-  getItem: (key: string): string | null => {
-    if (typeof window !== 'undefined' && window.sessionStorage) {
-      return sessionStorage.getItem(key);
-    }
-    return null;
-  },
-  setItem: (key: string, value: string): void => {
-    if (typeof window !== 'undefined' && window.sessionStorage) {
-      sessionStorage.setItem(key, value);
-    }
-  },
-  removeItem: (key: string): void => {
-    if (typeof window !== 'undefined' && window.sessionStorage) {
-      sessionStorage.removeItem(key);
-    }
-  }
-};
+import { getMFAStorage, getMFAConfig } from './mfa-config';
+
+// Storage interface - will be set based on config
+let storageInterface: any = null;
 
 // MFA session keys
 const MFA_SESSION_KEYS = {
@@ -37,25 +23,38 @@ export interface MFASessionData {
 }
 
 /**
- * Store MFA session data
+ * Get storage interface based on config
  */
-export function storeMFASession(sessionId: string, userId: string): void {
-  const now = Date.now();
-  
-  safeSessionStorage.setItem(MFA_SESSION_KEYS.SESSION_ID, sessionId);
-  safeSessionStorage.setItem(MFA_SESSION_KEYS.SESSION_USER, userId);
-  safeSessionStorage.setItem(MFA_SESSION_KEYS.LAST_ACTIVITY, now.toString());
-  
-  console.log('🔐 MFA session stored for user:', userId);
+async function getStorage() {
+  if (!storageInterface) {
+    storageInterface = await getMFAStorage();
+  }
+  return storageInterface;
 }
 
 /**
- * Get stored MFA session data
+ * Store MFA session data using configurable storage
  */
-export function getMFASession(): MFASessionData | null {
-  const sessionId = safeSessionStorage.getItem(MFA_SESSION_KEYS.SESSION_ID);
-  const userId = safeSessionStorage.getItem(MFA_SESSION_KEYS.SESSION_USER);
-  const lastActivity = safeSessionStorage.getItem(MFA_SESSION_KEYS.LAST_ACTIVITY);
+export async function storeMFASession(sessionId: string, userId: string): Promise<void> {
+  const now = Date.now();
+  const storage = await getStorage();
+  
+  storage.setItem(MFA_SESSION_KEYS.SESSION_ID, sessionId);
+  storage.setItem(MFA_SESSION_KEYS.SESSION_USER, userId);
+  storage.setItem(MFA_SESSION_KEYS.LAST_ACTIVITY, now.toString());
+  
+  console.log(`🔐 MFA session stored for user ${userId} using ${storage.type}`);
+}
+
+/**
+ * Get stored MFA session data using configurable storage
+ */
+export async function getMFASession(): Promise<MFASessionData | null> {
+  const storage = await getStorage();
+  
+  const sessionId = storage.getItem(MFA_SESSION_KEYS.SESSION_ID);
+  const userId = storage.getItem(MFA_SESSION_KEYS.SESSION_USER);
+  const lastActivity = storage.getItem(MFA_SESSION_KEYS.LAST_ACTIVITY);
   
   if (!sessionId || !userId || !lastActivity) {
     return null;
@@ -69,21 +68,22 @@ export function getMFASession(): MFASessionData | null {
 }
 
 /**
- * Check if current user has a valid stored session
+ * Check if current user has a valid stored session with configurable timeout
  */
-export function hasValidMFASession(userId: string): boolean {
-  const session = getMFASession();
+export async function hasValidMFASession(userId: string): Promise<boolean> {
+  const session = await getMFASession();
+  const config = await getMFAConfig();
   
   if (!session || session.userId !== userId) {
     return false;
   }
   
-  // Check if session is not too old (24 hours)
-  const maxAge = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
+  // Use configurable timeout from backend
+  const maxAge = config.session_timeout * 1000; // Convert to milliseconds
   const age = Date.now() - session.lastActivity;
   
   if (age > maxAge) {
-    clearMFASession();
+    await clearMFASession();
     return false;
   }
   
@@ -91,24 +91,27 @@ export function hasValidMFASession(userId: string): boolean {
 }
 
 /**
- * Update session activity timestamp
+ * Update session activity timestamp using configurable storage
  */
-export function updateMFASessionActivity(): void {
-  const session = getMFASession();
+export async function updateMFASessionActivity(): Promise<void> {
+  const session = await getMFASession();
   if (session) {
-    safeSessionStorage.setItem(MFA_SESSION_KEYS.LAST_ACTIVITY, Date.now().toString());
+    const storage = await getStorage();
+    storage.setItem(MFA_SESSION_KEYS.LAST_ACTIVITY, Date.now().toString());
   }
 }
 
 /**
- * Clear all MFA session data
+ * Clear all MFA session data using configurable storage
  */
-export function clearMFASession(): void {
-  safeSessionStorage.removeItem(MFA_SESSION_KEYS.SESSION_ID);
-  safeSessionStorage.removeItem(MFA_SESSION_KEYS.SESSION_USER);
-  safeSessionStorage.removeItem(MFA_SESSION_KEYS.LAST_ACTIVITY);
+export async function clearMFASession(): Promise<void> {
+  const storage = await getStorage();
   
-  console.log('🔐 MFA session cleared');
+  storage.removeItem(MFA_SESSION_KEYS.SESSION_ID);
+  storage.removeItem(MFA_SESSION_KEYS.SESSION_USER);
+  storage.removeItem(MFA_SESSION_KEYS.LAST_ACTIVITY);
+  
+  console.log(`🔐 MFA session cleared from ${storage.type}`);
 }
 
 /**

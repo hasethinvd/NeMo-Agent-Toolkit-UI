@@ -62,7 +62,7 @@ export const validateJIRACredentials = async (
       
       // Handle specific backend connectivity issues (more comprehensive detection)
       if (response.status === 500 && errorData.backend_status === 'unreachable') {
-        return {
+s          return {
           isValid: false,
           error: createBackendError('JIRA validation - TPM backend server is not accessible')
         };
