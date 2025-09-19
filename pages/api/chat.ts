@@ -40,7 +40,7 @@ const handler = async (req: Request): Promise<Response> => {
   }
 
   try {    
-    let payload: any;
+    let payload;
     
     // Decrypt JIRA credentials if they're encrypted
     let decryptedJiraCredentials;
@@ -66,14 +66,6 @@ const handler = async (req: Request): Promise<Response> => {
         payload = {
           input_message: messages[messages.length - 1]?.content ?? ''
         };
-        
-        // Add JIRA credentials to payload if available
-        if (decryptedJiraCredentials) {
-          payload.jira_credentials = decryptedJiraCredentials;
-          console.log('🔑 Added JIRA credentials to generate payload');
-        } else {
-          console.log('🔑 No JIRA credentials to add to generate payload');
-        }
       } else {
         throw new Error('User message not found: messages array is empty or invalid.');
       }
@@ -93,14 +85,6 @@ const handler = async (req: Request): Promise<Response> => {
         stop: true,
         additionalProp1: {}
       };
-      
-      // Add JIRA credentials to payload if available
-      if (decryptedJiraCredentials) {
-        payload.jira_credentials = decryptedJiraCredentials;
-        console.log('🔑 Added JIRA credentials to chat payload');
-      } else {
-        console.log('🔑 No JIRA credentials to add to chat payload');
-      }
     }
 
     console.log('aiq - making request to', { url: chatCompletionURL });

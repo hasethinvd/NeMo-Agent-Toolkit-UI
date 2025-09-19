@@ -7,7 +7,8 @@ export enum ErrorType {
   NETWORK_CONNECTION = 'NETWORK_CONNECTION',
   BACKEND_UNAVAILABLE = 'BACKEND_UNAVAILABLE',
   VALIDATION_FAILED = 'VALIDATION_FAILED',
-  SESSION_EXPIRED = 'SESSION_EXPIRED'
+  SESSION_EXPIRED = 'SESSION_EXPIRED',
+  HELIOS_DL_VALIDATION = 'HELIOS_DL_VALIDATION'
 }
 
 export interface ErrorDetails {
@@ -92,6 +93,37 @@ export const createMFAError = (details: {
   });
 };
 
+export const createHeliosDLError = (details: {
+  message: string;
+  statusCode?: number;
+  response?: any;
+}): TPMError => {
+  let userMessage = 'Access denied - DL group validation failed';
+  let userAction = 'Please reach out to Slack channel sw-aiq-tpm-pilot to request your access';
+
+  // Check for specific Helios DL validation error messages
+  if (details.message.includes('Access denied') || details.message.includes('not member')) {
+    userMessage = 'Access denied - You are not a member of the required DL groups';
+    userAction = 'Please reach out to Slack channel sw-aiq-tpm-pilot to request your access';
+  } else if (details.message.includes('Helios API') || details.message.includes('helios')) {
+    userMessage = 'DL group validation failed';
+    userAction = 'Please reach out to Slack channel sw-aiq-tpm-pilot to request your access';
+  } else if (details.statusCode === 401) {
+    userMessage = 'DL group validation authentication failed';
+    userAction = 'Please reach out to Slack channel sw-aiq-tpm-pilot to request your access';
+  } else if (details.statusCode === 403) {
+    userMessage = 'Access denied - Insufficient permissions for DL group validation';
+    userAction = 'Please reach out to Slack channel sw-aiq-tpm-pilot to request your access';
+  }
+
+  return new TPMError({
+    type: ErrorType.HELIOS_DL_VALIDATION,
+    message: userMessage,
+    userAction,
+    technicalDetails: details.message
+  });
+};
+
 export const createNetworkError = (operation: string): TPMError => {
   return new TPMError({
     type: ErrorType.NETWORK_CONNECTION,
@@ -150,6 +182,29 @@ export const showErrorToast = (error: TPMError | Error | string): void => {
 export const parseResponseError = async (response: Response, operation: string): Promise<TPMError> => {
   try {
     const errorData = await response.json();
+    
+    // Check for Helios DL validation errors first
+    console.log(' Checking error data:', errorData);
+    console.log('🔍 Error detail:', errorData.detail);
+    console.log('🔍 Response status:', response.status);
+    
+    if (errorData.detail && (
+      errorData.detail.includes('Access denied') ||
+      errorData.detail.includes('not member') ||
+      errorData.detail.includes('DL group') ||
+      errorData.detail.includes('Helios') ||
+      errorData.detail.includes('helios') ||
+      errorData.detail.includes('allowed DL groups')
+    )) {
+      console.log('🔍 Detected Helios DL validation error:', errorData.detail);
+      return createHeliosDLError({
+        message: errorData.detail,
+        statusCode: response.status,
+        response: errorData
+      });
+    }
+    
+    console.log('🔍 Not a Helios error, checking JIRA...');
     
     if (operation.includes('jira') || operation.includes('JIRA')) {
       return createJIRAError({

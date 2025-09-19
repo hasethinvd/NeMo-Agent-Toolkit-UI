@@ -81,7 +81,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       });
     } else {
       const errorData = await response.json().catch(() => ({}));
-      res.status(401).json({ 
+      // Preserve the original status code from the backend
+      res.status(response.status).json({ 
         valid: false, 
         error: errorData.detail || 'Backend validation failed',
         backend_status: 'failed',

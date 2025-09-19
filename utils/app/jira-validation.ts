@@ -1,5 +1,5 @@
 // JIRA credential validation utilities
-import { TPMError, createJIRAError, createNetworkError, createBackendError, parseResponseError } from './error-handler';
+import { TPMError, createJIRAError, createNetworkError, createBackendError, parseResponseError, createHeliosDLError } from './error-handler';
 
 export interface JIRAValidationResult {
   isValid: boolean;
@@ -77,7 +77,7 @@ export const validateJIRACredentials = async (
       }
       
       // Handle JIRA credential issues (only when backend responded)
-      if (response.status === 401 && errorData.backend_status === 'failed') {
+      if (response.status === 401) {
         return {
           isValid: false,
           error: createJIRAError({
@@ -86,23 +86,32 @@ export const validateJIRACredentials = async (
             response: errorData
           })
         };
-      }
-      
-      // Default to backend error for 500s, JIRA error for auth issues, generic for others
-      if (response.status >= 500) {
-        return {
-          isValid: false,
-          error: createBackendError('JIRA validation - Server error, likely backend connectivity issue')
-        };
-      } else if (response.status === 401 || response.status === 403) {
-        return {
-          isValid: false,
-          error: createJIRAError({
-            message: errorData.error || 'Authentication failed',
-            statusCode: response.status,
-            response: errorData
-          })
-        };
+      } else if (response.status === 403) {
+        // Check if this is a Helios DL validation error
+        if (errorData.error && (
+          errorData.error.includes('Access denied') ||
+          errorData.error.includes('not member') ||
+          errorData.error.includes('DL group') ||
+          errorData.error.includes('allowed DL groups')
+        )) {
+          return {
+            isValid: false,
+            error: createHeliosDLError({
+              message: errorData.error,
+              statusCode: response.status,
+              response: errorData
+            })
+          };
+        } else {
+          return {
+            isValid: false,
+            error: createJIRAError({
+              message: errorData.error || 'Access denied',
+              statusCode: response.status,
+              response: errorData
+            })
+          };
+        }
       } else {
         return {
           isValid: false,

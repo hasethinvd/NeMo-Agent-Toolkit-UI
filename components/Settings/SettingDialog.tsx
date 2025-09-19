@@ -15,6 +15,7 @@ import {
   clearMFASession,
   validateMFASessionWithBackend
 } from '@/utils/app/mfa-session';
+import { updateCSPForBackend } from '@/utils/app/security-headers';
 import {
   startMFAVerification,
   endMFAVerification,
@@ -82,6 +83,7 @@ export const SettingDialog: FC<Props> = ({ open, onClose }) => {
   const [mfaCode, setMfaCode] = useState('');
 
   // Load values from sessionStorage after component mounts (client-side only)
+  // Prioritize environment variables over sessionStorage for URL values
   useEffect(() => {
     const storedChatURL = safeSessionStorage.getItem('chatCompletionURL');
     const storedWebSocketURL = safeSessionStorage.getItem('webSocketURL');
@@ -90,8 +92,12 @@ export const SettingDialog: FC<Props> = ({ open, onClose }) => {
     const storedExpandSteps = safeSessionStorage.getItem('expandIntermediateSteps');
     const storedStepOverride = safeSessionStorage.getItem('intermediateStepOverride');
 
-    if (storedChatURL) setChatCompletionEndPoint(storedChatURL);
-    if (storedWebSocketURL) setWebSocketEndPoint(storedWebSocketURL);
+    // Use environment variables as defaults, sessionStorage as overrides
+    const envChatURL = process.env.NEXT_PUBLIC_HTTP_CHAT_COMPLETION_URL || '';
+    const envWebSocketURL = process.env.NEXT_PUBLIC_WS_CHAT_COMPLETION_URL || '';
+    
+    setChatCompletionEndPoint(storedChatURL || envChatURL || '');
+    setWebSocketEndPoint(storedWebSocketURL || envWebSocketURL || '');
     if (storedWebSocketSchema) setWebSocketSchema(storedWebSocketSchema);
     if (storedIntermediateSteps !== null) {
       setIsIntermediateStepsEnabled(storedIntermediateSteps === 'true');
@@ -101,6 +107,19 @@ export const SettingDialog: FC<Props> = ({ open, onClose }) => {
     }
     if (storedStepOverride !== null) {
       setIntermediateStepOverrideToggle(storedStepOverride !== 'false');
+    }
+  }, []);
+
+  // Update CSP on component mount if backend URL is already set
+  useEffect(() => {
+    const storedChatURL = sessionStorage.getItem('chatCompletionURL');
+    if (storedChatURL) {
+      console.log('🔧 Updating CSP on mount for stored URL:', storedChatURL);
+      try {
+        updateCSPForBackend(storedChatURL);
+      } catch (error) {
+        console.warn('Failed to update CSP on mount:', error);
+      }
     }
   }, []);
 
@@ -128,15 +147,16 @@ export const SettingDialog: FC<Props> = ({ open, onClose }) => {
           }
         }
         
-        // Check MFA status using dynamic backend discovery
+        // Check MFA status using consistent backend URL resolution
         try {
-          const backendUrl = await getBackendUrlWithDiscovery();
-          console.log('🔍 Using discovered backend URL for MFA status:', backendUrl);
+          const backendUrl = getTargetBackendUrl();
+          console.log('🔍 Using target backend URL for MFA status:', backendUrl);
           
-          const mfaResponse = await fetch(`${backendUrl}/api/mfa/status?user_id=${userId}`, {
+          const mfaResponse = await fetch(`/api/mfa-status-proxy?user_id=${userId}`, {
             method: 'GET',
             headers: {
               'Content-Type': 'application/json',
+              'X-Backend-URL': backendUrl,
             },
           });
           
@@ -215,12 +235,15 @@ export const SettingDialog: FC<Props> = ({ open, onClose }) => {
     try {
       setCurrentStep('Setting up MFA...');
       
-      // Call the actual MFA setup API to get QR code
+      // Call the MFA setup API via proxy to bypass CSP restrictions
       const targetBackendUrl = getTargetBackendUrl();
-      const response = await fetch(`${targetBackendUrl}/api/mfa/setup`, {
+      console.log('🔧 Using MFA proxy with backend URL:', targetBackendUrl);
+      
+      const response = await fetch('/api/mfa-proxy', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'X-Backend-URL': targetBackendUrl,
         },
         body: JSON.stringify({
           user_id: jiraUsernameValue,
@@ -338,6 +361,23 @@ export const SettingDialog: FC<Props> = ({ open, onClose }) => {
 
       console.log('✅ JIRA credentials are valid, proceeding with MFA flow');
       
+      // Update CSP to allow the backend URL before MFA flow
+      try {
+        console.log('🔧 Updating CSP before MFA flow for URL:', targetBackendUrl);
+        console.log('🔧 Target backend URL details:', {
+          targetBackendUrl,
+          protocol: new URL(targetBackendUrl).protocol,
+          hostname: new URL(targetBackendUrl).hostname,
+          port: new URL(targetBackendUrl).port
+        });
+        updateCSPForBackend(targetBackendUrl);
+        // Give the browser more time to process the CSP update
+        await new Promise(resolve => setTimeout(resolve, 200));
+        console.log('🔧 CSP update completed, proceeding with MFA flow');
+      } catch (error) {
+        console.warn('Failed to update CSP before MFA flow:', error);
+      }
+      
       const mfaResult = await handleMfaFlow();
       return mfaResult; // true = MFA modal shown (success), false = MFA setup failed
       
@@ -382,9 +422,14 @@ export const SettingDialog: FC<Props> = ({ open, onClose }) => {
 
   // Check MFA status from backend
   const checkMfaStatus = async (backendUrl: string) => {
-    const response = await fetch(`${backendUrl}/api/mfa/status?user_id=${jiraUsernameValue}`, {
+    // Use consistent backend URL resolution
+    const targetBackendUrl = getTargetBackendUrl();
+    const response = await fetch(`/api/mfa-status-proxy?user_id=${jiraUsernameValue}`, {
       method: 'GET',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 
+        'Content-Type': 'application/json',
+        'X-Backend-URL': targetBackendUrl,
+      },
     });
 
     if (!response.ok) {
@@ -501,6 +546,15 @@ export const SettingDialog: FC<Props> = ({ open, onClose }) => {
     safeSessionStorage.setItem('webSocketURL', webSocketEndPoint);
     safeSessionStorage.setItem('webSocketSchema', webSocketSchema);
     
+    // Update CSP to allow the new backend URL
+    try {
+      console.log('🔧 Updating CSP for backend URL:', chatCompletionEndPoint);
+      updateCSPForBackend(chatCompletionEndPoint);
+      console.log('✅ CSP update completed');
+    } catch (error) {
+      console.warn('Failed to update CSP:', error);
+    }
+    
     // Determine the correct backend URL for MFA/API calls based on environment
     const getBackendUrlForMFA = (): string => {
       // Check if we're in production environment (AI Factory)
@@ -546,6 +600,15 @@ export const SettingDialog: FC<Props> = ({ open, onClose }) => {
     setLastErrorType(null);
 
     try {
+      // Step 0: Update CSP early to allow backend connections
+      const targetBackendUrl = getTargetBackendUrl();
+      try {
+        console.log('🔧 Updating CSP early for URL:', targetBackendUrl);
+        updateCSPForBackend(targetBackendUrl);
+      } catch (error) {
+        console.warn('Failed to update CSP early:', error);
+      }
+
       // Step 1: Validate basic settings first
       if (!validateSettings()) {
         return;
@@ -627,9 +690,12 @@ export const SettingDialog: FC<Props> = ({ open, onClose }) => {
         (process.env.NEXT_PUBLIC_BACKEND_URL || 'https://127.0.0.1:8080');
       
       try {
-        await fetch(`${currentBackendUrl}/api/mfa/clear-session`, { 
+        await fetch('/api/mfa-clear-session-proxy', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' }
+          headers: { 
+            'Content-Type': 'application/json',
+            'X-Backend-URL': currentBackendUrl,
+          }
         });
         clearedItems.push('MFA session');
       } catch (error) {
@@ -699,12 +765,15 @@ export const SettingDialog: FC<Props> = ({ open, onClose }) => {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 second timeout
 
-      // Use consistent backend URL resolution
-      const backendUrl = getBackendUrl();
-      console.log('🔗 Using backend URL for MFA verification:', backendUrl);
-      const response = await fetch(`${backendUrl}/api/mfa/verify`, {
+      // Use MFA verify proxy to bypass CSP restrictions
+      const backendUrl = getTargetBackendUrl();
+      console.log('🔗 Using MFA verify proxy with backend URL:', backendUrl);
+      const response = await fetch('/api/mfa-verify-proxy', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'X-Backend-URL': backendUrl,
+        },
         body: JSON.stringify({
           user_id: currentUserId,
           code: mfaCode.trim(),
@@ -808,12 +877,19 @@ export const SettingDialog: FC<Props> = ({ open, onClose }) => {
       const targetBackendUrl = getTargetBackendUrl();
       console.log('🔗 Using target backend URL for JIRA save:', targetBackendUrl);
 
-      const response = await fetch(`${targetBackendUrl}/api/mfa/jira/test-connection`, {
+      const response = await fetch('/api/mfa-jira-test-proxy', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Basic ${btoa(`${jiraUsernameValue}:${jiraTokenValue}`)}`,
+          'X-Backend-URL': targetBackendUrl,
         },
+        body: JSON.stringify({
+          jira_credentials: {
+            username: jiraUsernameValue,
+            token: jiraTokenValue
+          }
+        }),
       });
 
       if (response.ok) {

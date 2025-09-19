@@ -2,7 +2,6 @@ import { Conversation, Message } from '@/types/chat';
 import { FolderInterface } from '@/types/folder';
 import { t } from 'i18next';
 import { getApiUrl } from '@/utils/app/api-config';
-import { env } from 'next-runtime-env';
 
 export interface HomeInitialState {
   loading: boolean;
@@ -45,16 +44,14 @@ export const initialState: HomeInitialState = {
   messageError: false,
   searchTerm: '',
   chatHistory: process?.env?.NEXT_PUBLIC_CHAT_HISTORY_DEFAULT_ON === 'true' || false,
-  // Default to staging chat completion URL if no env override is provided
-  chatCompletionURL:
-    process?.env?.NEXT_PUBLIC_HTTP_CHAT_COMPLETION_URL ||
-    'https://tpm-nat.prd.astra.nvidia.com/chat/stream',
+  // Read from environment variables
+  chatCompletionURL: process?.env?.NEXT_PUBLIC_HTTP_CHAT_COMPLETION_URL || '',
   webSocketMode: process?.env?.NEXT_PUBLIC_WEB_SOCKET_DEFAULT_ON === 'true' || false,
   webSocketConnected: false,
-      webSocketURL: process?.env?.NEXT_PUBLIC_WS_CHAT_COMPLETION_URL || 'wss://tpm-nat.prd.astra.nvidia.com/websocket',
+  webSocketURL: process?.env?.NEXT_PUBLIC_WS_CHAT_COMPLETION_URL || '',
   webSocketSchema: 'chat_stream',
   webSocketSchemas: ['chat_stream', 'chat', 'generate_stream', 'generate'],
-  enableIntermediateSteps: env('NEXT_PUBLIC_ENABLE_INTERMEDIATE_STEPS') === 'true' || process?.env?.NEXT_PUBLIC_ENABLE_INTERMEDIATE_STEPS === 'true' ? true : false,
+  enableIntermediateSteps: process?.env?.NEXT_PUBLIC_ENABLE_INTERMEDIATE_STEPS === 'true' ? true : false,
   expandIntermediateSteps: false,
   intermediateStepOverride: true,
   autoScroll: true,

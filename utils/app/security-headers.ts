@@ -7,6 +7,71 @@ export const setupSecurityHeaders = () => {
     return;
   }
 
+  // Get the current backend URL dynamically using the same logic as api-config.ts
+  const getBackendUrl = () => {
+    // Check if we have a configured backend URL in sessionStorage
+    const storedBackendUrl = sessionStorage.getItem('backendUrl');
+    if (storedBackendUrl) {
+      try {
+        const url = new URL(storedBackendUrl);
+        return `${url.protocol}//${url.host}`;
+      } catch (e) {
+        // Invalid URL, fall back to default
+      }
+    }
+    
+    // Check if we have a stored chat completion URL (this is what's actually being used)
+    const storedChatURL = sessionStorage.getItem('chatCompletionURL');
+    if (storedChatURL) {
+      try {
+        const url = new URL(storedChatURL);
+        return `${url.protocol}//${url.host}`;
+      } catch (error) {
+        console.warn('Invalid stored chat URL:', storedChatURL);
+      }
+    }
+    
+    // Check environment variables
+    const apiHost = process.env.NEXT_PUBLIC_API_HOST || 'localhost';
+    const apiProtocol = process.env.NEXT_PUBLIC_API_PROTOCOL || 'http';
+    const apiPort = process.env.NEXT_PUBLIC_API_PORT || '8080';
+    
+    return `${apiProtocol}://${apiHost}:${apiPort}`;
+  };
+
+  const backendUrl = getBackendUrl();
+  const backendHost = backendUrl.replace(/^https?:\/\//, '').split(':')[0];
+  
+  // Debug logging
+  console.log('🔧 CSP Backend URL detection:', {
+    backendUrl,
+    backendHost,
+    storedBackendUrl: sessionStorage.getItem('backendUrl'),
+    storedChatURL: sessionStorage.getItem('chatCompletionURL'),
+    envHost: process.env.NEXT_PUBLIC_API_HOST,
+    envProtocol: process.env.NEXT_PUBLIC_API_PROTOCOL,
+    envPort: process.env.NEXT_PUBLIC_API_PORT,
+    windowLocation: typeof window !== 'undefined' ? window.location.href : 'N/A'
+  });
+  
+  // Build connect-src directive with dynamic backend URL
+  const connectSrc = [
+    "'self'",
+    "https://jirasw.nvidia.com",
+    "https://*.astra.nvidia.com", 
+    "https://tpm-nat.prd.astra.nvidia.com",
+    "https://127.0.0.1:*",
+    "http://127.0.0.1:*",
+    "https://localhost:*",
+    "http://localhost:*",
+    `http://${backendHost}:*`,
+    `https://${backendHost}:*`,
+    "wss:",
+    "ws:"
+  ].join(' ');
+  
+  console.log('🔧 CSP connect-src:', connectSrc);
+
   // Prevent credential data from being accessed via XSS
   const meta = document.createElement('meta');
   meta.httpEquiv = 'Content-Security-Policy';
@@ -15,12 +80,77 @@ export const setupSecurityHeaders = () => {
     script-src 'self' 'unsafe-inline' 'unsafe-eval';
     style-src 'self' 'unsafe-inline';
     img-src 'self' data: https:;
-    connect-src 'self' https://jirasw.nvidia.com https://*.astra.nvidia.com https://tpm-nat.prd.astra.nvidia.com https://127.0.0.1:* http://127.0.0.1:* https://localhost:* http://localhost:* wss: ws:;
+    connect-src ${connectSrc};
     frame-ancestors 'none';
     base-uri 'self';
     form-action 'self';
   `.replace(/\s+/g, ' ').trim();
   document.head.appendChild(meta);
+};
+
+// Function to update CSP dynamically when backend URL changes
+export const updateCSPForBackend = (backendUrl: string) => {
+  if (typeof document === 'undefined') {
+    return;
+  }
+
+  try {
+    const url = new URL(backendUrl);
+    const backendHost = url.hostname;
+    
+    console.log('🔧 Updating CSP for backend:', { backendUrl, backendHost });
+    
+    // Remove ALL existing CSP meta tags
+    const existingMetas = document.querySelectorAll('meta[http-equiv="Content-Security-Policy"]');
+    existingMetas.forEach(meta => meta.remove());
+    
+    // Build new connect-src directive
+    const connectSrc = [
+      "'self'",
+      "https://jirasw.nvidia.com",
+      "https://*.astra.nvidia.com", 
+      "https://tpm-nat.prd.astra.nvidia.com",
+      "https://127.0.0.1:*",
+      "http://127.0.0.1:*",
+      "https://localhost:*",
+      "http://localhost:*",
+      `http://${backendHost}:*`,
+      `https://${backendHost}:*`,
+      "wss:",
+      "ws:"
+    ].join(' ');
+    
+    // Create new CSP meta tag
+    const meta = document.createElement('meta');
+    meta.httpEquiv = 'Content-Security-Policy';
+    meta.content = `
+      default-src 'self';
+      script-src 'self' 'unsafe-inline' 'unsafe-eval';
+      style-src 'self' 'unsafe-inline';
+      img-src 'self' data: https:;
+      connect-src ${connectSrc};
+      frame-ancestors 'none';
+      base-uri 'self';
+      form-action 'self';
+    `.replace(/\s+/g, ' ').trim();
+    
+    // Insert at the beginning of head to ensure it's processed first
+    document.head.insertBefore(meta, document.head.firstChild);
+    
+    // Force a small delay to ensure the CSP is processed
+    setTimeout(() => {
+      console.log('✅ CSP updated with connect-src:', connectSrc);
+      console.log('🔧 Current CSP meta tags:', document.querySelectorAll('meta[http-equiv="Content-Security-Policy"]').length);
+      
+      // Try to force browser to recognize the new CSP by dispatching a custom event
+      const event = new CustomEvent('csp-updated', { 
+        detail: { backendUrl, backendHost, connectSrc } 
+      });
+      document.dispatchEvent(event);
+    }, 50);
+  } catch (error) {
+    console.error('❌ Failed to update CSP:', error);
+  }
 };
 
 // Detect potential credential theft attempts

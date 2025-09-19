@@ -1,9 +1,6 @@
-const { configureRuntimeEnv } = require('next-runtime-env/build/configure');
-
 const nextConfig = {
-  env: {
-    ...configureRuntimeEnv(),
-  },
+  // Remove next-runtime-env - it's causing build-time hardcoded values
+  // We'll use API endpoint instead for runtime environment variables
   output: 'standalone',
   typescript: {
     // !! WARN !!
