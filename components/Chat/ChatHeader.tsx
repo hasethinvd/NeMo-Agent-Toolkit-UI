@@ -64,8 +64,16 @@ export const ChatHeader = ({ webSocketModeRef = {} }) => {
                     Hi, I'm TPM AI Assistant
                   </div>
                   <div className="text-lg text-gray-600 dark:text-gray-400">
-                    How can I assist you today?
-                    Please refer to the [onboarding documentation](https://docs.google.com/document/d/1NrLx0_V_F1_XHqFzUoPnIyhflFmuiEtHyTIOwWBaqso/edit?usp=sharing) for access instructions and steps to get started.
+                    Please refer to our{' '}
+                    <a
+                      href="https://docs.google.com/document/d/1NrLx0_V_F1_XHqFzUoPnIyhflFmuiEtHyTIOwWBaqso"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 underline"
+                    >
+                      onboarding document
+                    </a>
+                    {' '}for access instructions and authentication steps to get started.
                   </div>
                 </div>
             } 
