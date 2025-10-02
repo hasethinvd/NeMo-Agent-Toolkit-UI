@@ -69,17 +69,17 @@ interface StoredEncryptedData {
 // Generate a random password for the session if it doesn't exist
 const getSessionPassword = (keyVersion?: number): string => {
   const keyName = keyVersion ? `${S_KEY}-v${keyVersion}` : S_KEY;
-  let pass = sessionStorage.getItem(keyName);
+  let pass = localStorage.getItem(keyName);
   if (!pass) {
     pass = window.crypto.getRandomValues(new Uint8Array(32)).toString();
-    sessionStorage.setItem(keyName, pass);
+    localStorage.setItem(keyName, pass);
   }
   return pass;
 };
 
 // Get current key version or create new one
 const getCurrentKeyVersion = (): number => {
-  const rotationData = sessionStorage.getItem(R_KEY);
+  const rotationData = localStorage.getItem(R_KEY);
   if (rotationData) {
     try {
       const { currentVersion } = JSON.parse(rotationData);
@@ -93,7 +93,7 @@ const getCurrentKeyVersion = (): number => {
 
 // Check if key rotation is needed
 const shouldRotateKey = (): boolean => {
-  const rotationData = sessionStorage.getItem(R_KEY);
+  const rotationData = localStorage.getItem(R_KEY);
   if (!rotationData) return false;
   
   try {
@@ -121,7 +121,7 @@ const rotateEncryptionKey = async (): Promise<number> => {
     nextRotation: nextRotation.toISOString()
   };
   
-  sessionStorage.setItem(R_KEY, JSON.stringify(rotationData));
+  localStorage.setItem(R_KEY, JSON.stringify(rotationData));
   console.log(`🔄 Encryption key rotated to version ${newVersion}`);
   
   return newVersion;
@@ -164,7 +164,7 @@ const reencryptWithNewKey = async (newKeyVersion: number): Promise<void> => {
       enc.encode(JSON.stringify(credentials)),
     );
 
-    const rotationData = JSON.parse(sessionStorage.getItem(R_KEY) || '{}');
+    const rotationData = JSON.parse(localStorage.getItem(R_KEY) || '{}');
     const now = new Date();
 
     const newStoredData: StoredEncryptedData = {
@@ -178,11 +178,11 @@ const reencryptWithNewKey = async (newKeyVersion: number): Promise<void> => {
       rotationSchedule: rotationData.nextRotation || new Date(now.getTime() + KEY_ROTATION_INTERVAL).toISOString()
     };
 
-    sessionStorage.setItem(C_KEY, JSON.stringify(newStoredData));
+    localStorage.setItem(C_KEY, JSON.stringify(newStoredData));
     console.log(`🔄 Credentials re-encrypted with key version ${newKeyVersion}`);
     
     // Clean up old key
-    sessionStorage.removeItem(`${S_KEY}-v${storedData.keyVersion}`);
+    localStorage.removeItem(`${S_KEY}-v${storedData.keyVersion}`);
   } catch (error) {
     console.error('Error re-encrypting credentials with new key:', error);
   }
@@ -245,13 +245,13 @@ export const setSecureJIRACredentials = async (credentials: JIRACredentials) => 
     const now = new Date();
     
     // Initialize rotation schedule if not exists
-    if (!sessionStorage.getItem(R_KEY)) {
+    if (!localStorage.getItem(R_KEY)) {
       const rotationData = {
         currentVersion: keyVersion,
         lastRotation: now.toISOString(),
         nextRotation: new Date(now.getTime() + KEY_ROTATION_INTERVAL).toISOString()
       };
-      sessionStorage.setItem(R_KEY, JSON.stringify(rotationData));
+      localStorage.setItem(R_KEY, JSON.stringify(rotationData));
     }
     
     // Rotate key if needed
@@ -274,7 +274,7 @@ export const setSecureJIRACredentials = async (credentials: JIRACredentials) => 
     );
 
     const fingerprint = await createFingerprint(credentials.token);
-    const rotationData = JSON.parse(sessionStorage.getItem(R_KEY) || '{}');
+    const rotationData = JSON.parse(localStorage.getItem(R_KEY) || '{}');
 
     const storedData: StoredEncryptedData = {
       iv: Buffer.from(iv).toString('base64'),
@@ -287,8 +287,9 @@ export const setSecureJIRACredentials = async (credentials: JIRACredentials) => 
       rotationSchedule: rotationData.nextRotation || new Date(now.getTime() + KEY_ROTATION_INTERVAL).toISOString()
     };
 
-    localStorage.setItem(C_KEY, JSON.stringify(storedData));
-    console.log(`JIRA credentials securely stored with key version ${keyVersion} in localStorage`);
+    const storage = await getJiraStorage();
+    storage.setItem(C_KEY, JSON.stringify(storedData));
+    console.log(`JIRA credentials securely stored with key version ${keyVersion} in ${storage.type}`);
   } catch (error) {
     console.error('Error setting secure JIRA credentials:', error);
   }
@@ -313,7 +314,8 @@ export const getSecureJIRACredentials = async (): Promise<JIRACredentials | null
       return null;
     }
     
-    const storedDataJSON = localStorage.getItem(C_KEY);
+    const storage = await getJiraStorage();
+    const storedDataJSON = storage.getItem(C_KEY);
     if (!storedDataJSON) return null;
 
     const storedData: StoredEncryptedData = JSON.parse(storedDataJSON);
@@ -361,29 +363,30 @@ export const getSecureJIRACredentials = async (): Promise<JIRACredentials | null
 };
 
 // Clear credentials from storage and cleanup rotation data
-export const clearJIRACredentials = () => {
-  // Remove credentials from localStorage (for cross-tab persistence)
-  localStorage.removeItem(C_KEY);
+export const clearJIRACredentials = async () => {
+  // Remove credentials using configurable storage
+  const storage = await getJiraStorage();
+  storage.removeItem(C_KEY);
   
   // Clean up all key versions
-  const rotationData = sessionStorage.getItem(R_KEY);
+  const rotationData = localStorage.getItem(R_KEY);
   if (rotationData) {
     try {
       const { currentVersion } = JSON.parse(rotationData);
       for (let i = 1; i <= currentVersion; i++) {
-        sessionStorage.removeItem(`${S_KEY}-v${i}`);
+        localStorage.removeItem(`${S_KEY}-v${i}`);
       }
     } catch {
       // Fallback cleanup
       for (let i = 1; i <= 10; i++) {
-        sessionStorage.removeItem(`${S_KEY}-v${i}`);
+        localStorage.removeItem(`${S_KEY}-v${i}`);
       }
     }
   }
   
   // Remove rotation schedule and base session key
-  sessionStorage.removeItem(R_KEY);
-  sessionStorage.removeItem(S_KEY);
+  localStorage.removeItem(R_KEY);
+  localStorage.removeItem(S_KEY);
   
   console.log('🧹 JIRA credentials and all encryption keys cleared');
 };
@@ -464,7 +467,7 @@ export const getJIRACredentialStatus = (): { expires?: Date, fingerprint?: strin
 
 // Get key rotation status for monitoring
 export const getKeyRotationStatus = (): { currentVersion: number, lastRotation?: Date, nextRotation?: Date, rotationInterval: number } | null => {
-    const rotationData = sessionStorage.getItem(R_KEY);
+    const rotationData = localStorage.getItem(R_KEY);
     if (!rotationData) return null;
 
     try {

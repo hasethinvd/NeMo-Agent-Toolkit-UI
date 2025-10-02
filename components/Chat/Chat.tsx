@@ -290,12 +290,17 @@ export const Chat = () => {
     const maxRetries = 3;
     const retryDelay = 1000; // 1-second delay between retries
 
-    if (!(safeSessionStorage.getItem('webSocketURL') || webSocketURL)) {
+    // Check localStorage first (persists across tabs), then sessionStorage, then prop
+    const savedWebSocketURL = (typeof window !== 'undefined' && localStorage.getItem('webSocketURL')) || 
+                               safeSessionStorage.getItem('webSocketURL') || 
+                               webSocketURL;
+    
+    if (!savedWebSocketURL) {
       toast.error("Please set a valid WebSocket server in settings");
       return false;
     }
 
-    const url = safeSessionStorage.getItem('webSocketURL') || webSocketURL;
+    const url = savedWebSocketURL;
     if (!url) {
       toast.error("Please set a valid WebSocket server in settings");
       return false;
@@ -311,7 +316,11 @@ export const Chat = () => {
 
       ws.onopen = () => {
        
-        toast.success("Connected to " + (safeSessionStorage.getItem('webSocketURL') || webSocketURL), {
+        // Use the same URL resolution logic for the success message
+        const displayURL = (typeof window !== 'undefined' && localStorage.getItem('webSocketURL')) || 
+                           safeSessionStorage.getItem('webSocketURL') || 
+                           webSocketURL;
+        toast.success("Connected to " + displayURL, {
           id: "websocketSuccessToastId",
         });
         toast.dismiss(websocketLoadingToastIdRef.current);

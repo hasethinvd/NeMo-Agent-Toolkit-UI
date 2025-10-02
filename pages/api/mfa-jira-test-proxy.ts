@@ -9,7 +9,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // Get the backend URL from the request headers or use default
     const backendUrl = req.headers['x-backend-url'] as string || 'http://localhost:8080';
     
-    console.log('🔧 MFA JIRA Test Proxy: Forwarding request to:', `${backendUrl}/api/mfa/jira/test-connection`);
+    console.log('MFA JIRA Test Proxy: Forwarding request to:', `${backendUrl}/api/mfa/jira/test-connection`);
+    console.log('MFA JIRA Test Proxy: Request body:', req.body);
     
     // Forward the request to the actual backend
     // Forward cookies for JWT session validation

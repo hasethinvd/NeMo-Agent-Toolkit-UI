@@ -18,29 +18,45 @@ export const JiraStatus: FC<Props> = ({ className = '' }) => {
     try {
       // First check local credentials
       const currentStatus = getJIRACredentialStatus();
+      console.log('JIRA credential status check:', currentStatus);
+      
       if (currentStatus) {
         const creds = await getSecureJIRACredentials();
+        console.log('Retrieved JIRA credentials:', creds ? `username: ${creds.username}` : 'null');
         setUiCredentials(creds);
         
         // Also validate with backend using JWT cookies to check active session
         try {
-          // Get the correct backend URL dynamically
-          const { getBackendUrl } = await import('../../utils/app/api-config');
+          // Get the correct backend URL and auth method dynamically
+          const { getBackendUrl, shouldUseHeaderAuth } = await import('../../utils/app/api-config');
           const backendUrl = getBackendUrl();
+          const useHeaderAuth = await shouldUseHeaderAuth();
           
-          const response = await fetch('/api/mfa-jira-test-proxy', {
-            method: 'POST',
-            credentials: 'include',  // Include httpOnly JWT cookies
-            headers: {
-              'Content-Type': 'application/json',
-              'X-Backend-URL': backendUrl  // Use dynamic backend URL
-            },
-            body: JSON.stringify({
+          let headers: any = {
+            'Content-Type': 'application/json',
+            'X-Backend-URL': backendUrl
+          };
+          let body: any = {};
+          
+          if (useHeaderAuth) {
+            // Send credentials via Authorization header
+            headers['Authorization'] = `Basic ${btoa(`${creds?.username}:${creds?.token}`)}`;
+            body = {};  // Empty body for header auth
+          } else {
+            // Send credentials in request body
+            body = {
               jira_credentials: {
                 username: creds?.username,
                 token: creds?.token
               }
-            })
+            };
+          }
+          
+          const response = await fetch('/api/mfa-jira-test-proxy', {
+            method: 'POST',
+            credentials: 'include',  // Include httpOnly JWT cookies
+            headers: headers,
+            body: JSON.stringify(body)
           });
           
           if (response.ok) {
