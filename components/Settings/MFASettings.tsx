@@ -255,6 +255,7 @@ export const MFASettings: FC<Props> = ({ className = '' }) => {
       
       const response = await fetch(`${backendUrl}/api/mfa/verify`, {
         method: 'POST',
+        credentials: 'include',  // Include cookies for JWT token
         headers: {
           'Content-Type': 'application/json',
         },
@@ -268,10 +269,9 @@ export const MFASettings: FC<Props> = ({ className = '' }) => {
       if (response.ok) {
         const data = await response.json();
         if (data.success) {
-          // Store the session ID using unified session management
-          if (data.session_id) {
-            storeMFASession(data.session_id, userId);
-          }
+          // With JWT httpOnly cookies, session is automatically managed by browser
+          // No need to manually store - the server set the cookie
+          console.log('🔐 MFA session cookie set by server');
           toast.success('🎉 MFA verification completed successfully!');
           setShowSetup(false);
           setSetupData(null);
