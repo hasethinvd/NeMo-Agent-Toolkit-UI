@@ -15,14 +15,53 @@ export const JiraStatus: FC<Props> = ({ className = '' }) => {
     const updateStatus = async () => {
     setLoading(true);
     
-    // Check UI credentials only
+    try {
+      // First check local credentials
       const currentStatus = getJIRACredentialStatus();
       if (currentStatus) {
         const creds = await getSecureJIRACredentials();
-      setUiCredentials(creds);
+        setUiCredentials(creds);
+        
+        // Also validate with backend using JWT cookies to check active session
+        try {
+          // Get the correct backend URL dynamically
+          const { getBackendUrl } = await import('../utils/app/api-config');
+          const backendUrl = getBackendUrl();
+          
+          const response = await fetch('/api/mfa-jira-test-proxy', {
+            method: 'POST',
+            credentials: 'include',  // Include httpOnly JWT cookies
+            headers: {
+              'Content-Type': 'application/json',
+              'X-Backend-URL': backendUrl  // Use dynamic backend URL
+            },
+            body: JSON.stringify({
+              jira_credentials: {
+                username: creds?.username,
+                token: creds?.token
+              }
+            })
+          });
+          
+          if (response.ok) {
+            const data = await response.json();
+            console.log('JIRA backend validation result:', data.valid, 'using backend:', backendUrl);
+            // Keep credentials if backend validation succeeds
+          } else {
+            console.log('JIRA backend validation failed, but keeping local credentials. Backend:', backendUrl);
+            // Still show connected based on local credentials
+          }
+        } catch (error) {
+          console.log('Could not validate JIRA session with backend:', error);
+          // Still show connected based on local credentials
+        }
       } else {
-      setUiCredentials(null);
+        setUiCredentials(null);
       }
+    } catch (error) {
+      console.error('Error updating JIRA status:', error);
+      setUiCredentials(null);
+    }
     
     setLoading(false);
     };
