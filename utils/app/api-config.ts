@@ -127,7 +127,7 @@ async function discoverBackendUrl(): Promise<string> {
       const config = await readBackendConfig();
       const testUrl = `${config.protocol}://${config.host}:${config.port}`;
       
-      console.log('🔍 Testing backend URL from config:', testUrl);
+      console.log('Testing backend URL from config:', testUrl);
       
       // Verify the backend is actually running
       try {
@@ -143,22 +143,23 @@ async function discoverBackendUrl(): Promise<string> {
         clearTimeout(timeoutId);
         
         if (response.ok) {
-          console.log('✅ Backend verified at:', testUrl);
+          console.log('Backend verified at:', testUrl);
           discoveredBackendUrl = testUrl;
           
-          // Store in sessionStorage for future use
+          // Store in localStorage for persistence across tabs
           if (typeof window !== 'undefined') {
+            localStorage.setItem('discoveredBackendUrl', testUrl);
             sessionStorage.setItem('discoveredBackendUrl', testUrl);
           }
           
           return testUrl;
         }
       } catch (error) {
-        console.warn(`⚠️ Backend not responding at ${testUrl}:`, error.message);
+        console.warn(`Backend not responding at ${testUrl}:`, error.message);
       }
       
       // If configured URL doesn't work, fall back to port scanning
-      console.log('🔍 Config-based URL failed, trying port discovery...');
+      console.log('Config-based URL failed, trying port discovery...');
       const fallbackPorts = [8088, 8081, 8080, 8000, 9000, 3001];
       const protocols = ['http', 'https'];
       
@@ -178,10 +179,11 @@ async function discoverBackendUrl(): Promise<string> {
             clearTimeout(timeoutId);
             
             if (response.ok) {
-              console.log('✅ Backend discovered via fallback at:', fallbackUrl);
+              console.log('Backend discovered via fallback at:', fallbackUrl);
               discoveredBackendUrl = fallbackUrl;
               
               if (typeof window !== 'undefined') {
+                localStorage.setItem('discoveredBackendUrl', fallbackUrl);
                 sessionStorage.setItem('discoveredBackendUrl', fallbackUrl);
               }
               
@@ -197,7 +199,7 @@ async function discoverBackendUrl(): Promise<string> {
     }
     
     // If all discovery fails, use intelligent default
-    console.warn('⚠️ Backend auto-discovery failed, using intelligent default');
+    console.warn('Backend auto-discovery failed, using intelligent default');
     const fallback = process.env.NODE_ENV === 'development' 
       ? 'http://localhost:8081' 
       : getApiBaseUrl();
@@ -218,8 +220,8 @@ export function getBackendUrl(): string {
     return getApiBaseUrl();
   }
   
-  // Second priority: Explicit backend URL from sessionStorage (set by settings)
-  const storedBackendUrl = sessionStorage.getItem('backendUrl');
+  // Second priority: Explicit backend URL from localStorage/sessionStorage (set by settings)
+  const storedBackendUrl = localStorage.getItem('backendUrl') || sessionStorage.getItem('backendUrl');
   if (storedBackendUrl) {
     return storedBackendUrl;
   }
@@ -230,19 +232,17 @@ export function getBackendUrl(): string {
   if (hostname.includes('tpm.prd.astra.nvidia.com') || hostname.includes('astra.nvidia.com')) {
     return 'https://tpm-nat.prd.astra.nvidia.com';
   }
-  // If running on localhost, use local backend
-  if (hostname.includes('localhost') || hostname.includes('127.0.0.1')) {
-    return 'http://localhost:8080';
-  }
+  // For localhost, prefer previously discovered URL over hardcoded fallback
+  // (Skip this priority to avoid overriding discovered URLs)
   
-  // Fourth priority: Previously discovered backend URL
-  const storedDiscoveredUrl = sessionStorage.getItem('discoveredBackendUrl');
+  // Fourth priority: Previously discovered backend URL (check localStorage first for persistence)
+  const storedDiscoveredUrl = localStorage.getItem('discoveredBackendUrl') || sessionStorage.getItem('discoveredBackendUrl');
   if (storedDiscoveredUrl) {
     return storedDiscoveredUrl;
   }
   
-  // Fifth priority: Current chat completion URL from sessionStorage (UI settings)
-  const storedChatURL = sessionStorage.getItem('chatCompletionURL');
+  // Fifth priority: Current chat completion URL from localStorage/sessionStorage (UI settings)
+  const storedChatURL = localStorage.getItem('chatCompletionURL') || sessionStorage.getItem('chatCompletionURL');
   if (storedChatURL) {
     try {
       const url = new URL(storedChatURL);
@@ -332,17 +332,17 @@ export async function shouldUseHeaderAuth(): Promise<boolean> {
   // First check environment variable for explicit configuration
   if (process.env.NEXT_PUBLIC_JIRA_AUTH_METHOD) {
     const envAuthMethod = process.env.NEXT_PUBLIC_JIRA_AUTH_METHOD.toLowerCase();
-    console.log(`🔐 Using auth method from environment: ${envAuthMethod}`);
+    console.log(`Using auth method from environment: ${envAuthMethod}`);
     return envAuthMethod === 'header';
   }
   
   // Fallback to backend config detection
   try {
     const config = await getBackendJiraConfig();
-    console.log(`🔐 Detected auth method from backend: ${config.auth_method}`);
+    console.log(`Detected auth method from backend: ${config.auth_method}`);
     return config.auth_method === 'header';
   } catch (error) {
-    console.warn('🔐 Failed to detect auth method, defaulting to header');
+    console.warn('Failed to detect auth method, defaulting to header');
     return true; // Default to header if detection fails
   }
 }

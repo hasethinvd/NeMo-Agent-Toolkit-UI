@@ -62,7 +62,7 @@ export const validateJIRACredentials = async (
       
       // Handle specific backend connectivity issues (more comprehensive detection)
       if (response.status === 500 && errorData.backend_status === 'unreachable') {
-          return {
+        return {
           isValid: false,
           error: createBackendError('JIRA validation - TPM backend server is not accessible')
         };
@@ -181,7 +181,7 @@ export const checkBackendAvailability = async (backendUrl?: string): Promise<boo
         ? sessionStorage.getItem('chatCompletionURL') 
         : null;
       
-      targetUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'https://127.0.0.1:9001'; // use env var or fallback to 9001
+      targetUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'https://127.0.0.1:8001'; // use env var or fallback to 9001
       
       if (storedChatURL) {
         // Extract base URL from stored chat completion URL

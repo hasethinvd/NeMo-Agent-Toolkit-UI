@@ -12,12 +12,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     
     console.log('🔧 MFA Status Proxy: Forwarding request to:', `${backendUrl}/api/mfa/status?user_id=${userId}`);
     
-    // Forward the request to the actual backend
+    // Forward the request to the actual backend with cookies
+    const forwardHeaders: any = {
+      'Content-Type': 'application/json',
+    };
+    
+    // Forward cookies if they exist (for JWT session validation)
+    if (req.headers.cookie) {
+      forwardHeaders['Cookie'] = req.headers.cookie;
+    }
+    
     const response = await fetch(`${backendUrl}/api/mfa/status?user_id=${userId}`, {
       method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers: forwardHeaders,
     });
 
     const data = await response.json();

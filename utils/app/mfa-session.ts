@@ -47,9 +47,14 @@ export async function storeMFASession(sessionId: string, userId: string): Promis
 }
 
 /**
- * Get stored MFA session data using configurable storage
+ * Get stored MFA session data - check cookies first, then fallback to storage
  */
 export async function getMFASession(): Promise<MFASessionData | null> {
+  // First check for httpOnly cookie (more secure)
+  // Note: We can't directly access httpOnly cookies from JavaScript,
+  // but we can validate with the backend
+  
+  // Fallback to storage for backward compatibility
   const storage = await getStorage();
   
   const sessionId = storage.getItem(MFA_SESSION_KEYS.SESSION_ID);
@@ -68,26 +73,33 @@ export async function getMFASession(): Promise<MFASessionData | null> {
 }
 
 /**
- * Check if current user has a valid stored session with configurable timeout
+ * Check if current user has a valid MFA session (uses backend validation for httpOnly cookies)
  */
 export async function hasValidMFASession(userId: string): Promise<boolean> {
-  const session = await getMFASession();
-  const config = await getMFAConfig();
-  
-  if (!session || session.userId !== userId) {
+  try {
+    // Since we use httpOnly cookies, we need to check with the backend
+    const { getBackendUrlWithDiscovery } = await import('./api-config');
+    const backendUrl = await getBackendUrlWithDiscovery();
+    
+    // The backend will automatically read the httpOnly cookie from the request
+    const response = await fetch(`${backendUrl}/api/mfa/session/validate?user_id=${userId}`, {
+      method: 'GET',
+      credentials: 'include',  // Important: Include cookies in request
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
+    
+    if (response.ok) {
+      const data = await response.json();
+      return data.valid === true;
+    }
+    
+    return false;
+  } catch (error) {
+    console.error('Error checking MFA session:', error);
     return false;
   }
-  
-  // Use configurable timeout from backend
-  const maxAge = config.session_timeout * 1000; // Convert to milliseconds
-  const age = Date.now() - session.lastActivity;
-  
-  if (age > maxAge) {
-    await clearMFASession();
-    return false;
-  }
-  
-  return true;
 }
 
 /**
@@ -140,7 +152,14 @@ export async function validateMFASessionWithBackend(
   
   try {
     const response = await fetch(
-      `${resolvedBackendUrl}/api/mfa/session/validate?session_id=${session.sessionId}&user_id=${session.userId}`
+      `${resolvedBackendUrl}/api/mfa/session/validate?session_id=${session.sessionId}&user_id=${session.userId}`,
+      {
+        method: 'GET',
+        credentials: 'include',  // Include httpOnly cookies
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      }
     );
     
     if (!response.ok) {

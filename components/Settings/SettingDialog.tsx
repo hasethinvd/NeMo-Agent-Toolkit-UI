@@ -129,7 +129,7 @@ export const SettingDialog: FC<Props> = ({ open, onClose }) => {
   useEffect(() => {
     const storedChatURL = sessionStorage.getItem('chatCompletionURL');
     if (storedChatURL) {
-      console.log('🔧 Updating CSP on mount for stored URL:', storedChatURL);
+      console.log('Updating CSP on mount for stored URL:', storedChatURL);
       try {
         updateCSPForBackend(storedChatURL);
       } catch (error) {
@@ -138,8 +138,33 @@ export const SettingDialog: FC<Props> = ({ open, onClose }) => {
     }
   }, []);
 
-  // Load JIRA credentials and MFA status on component mount
+  // Load saved URLs from localStorage on component mount
   useEffect(() => {
+    const loadSavedSettings = () => {
+      // Load URLs from localStorage first (persists across tabs)
+      const savedChatURL = localStorage.getItem('chatCompletionURL');
+      const savedWebSocketURL = localStorage.getItem('webSocketURL');
+      const savedWebSocketSchema = localStorage.getItem('webSocketSchema');
+      
+      if (savedChatURL && savedChatURL !== chatCompletionEndPoint) {
+        setChatCompletionEndPoint(savedChatURL);
+        homeDispatch({ field: 'chatCompletionURL', value: savedChatURL });
+        console.log('Loaded chat URL from localStorage:', savedChatURL);
+      }
+      
+      if (savedWebSocketURL && savedWebSocketURL !== webSocketEndPoint) {
+        setWebSocketEndPoint(savedWebSocketURL);
+        homeDispatch({ field: 'webSocketURL', value: savedWebSocketURL });
+        console.log('Loaded WebSocket URL from localStorage:', savedWebSocketURL);
+      }
+      
+      if (savedWebSocketSchema && savedWebSocketSchema !== webSocketSchema) {
+        setWebSocketSchema(savedWebSocketSchema);
+        homeDispatch({ field: 'webSocketSchema', value: savedWebSocketSchema });
+        console.log('Loaded WebSocket schema from localStorage:', savedWebSocketSchema);
+      }
+    };
+
     const loadCredentials = async () => {
       try {
         // Check if credentials exist
@@ -165,7 +190,7 @@ export const SettingDialog: FC<Props> = ({ open, onClose }) => {
         // Check MFA status using consistent backend URL resolution
         try {
           const backendUrl = getTargetBackendUrl();
-          console.log('🔍 Using target backend URL for MFA status:', backendUrl);
+          console.log('Using target backend URL for MFA status:', backendUrl);
           
           const mfaResponse = await fetch(`/api/mfa-status-proxy?user_id=${userId}`, {
             method: 'GET',
@@ -189,7 +214,8 @@ export const SettingDialog: FC<Props> = ({ open, onClose }) => {
     };
     
     if (open) {
-      loadCredentials();
+      loadSavedSettings();  // Load saved URLs first
+      loadCredentials();    // Then load credentials
     }
   }, [open]);
 
@@ -235,14 +261,12 @@ export const SettingDialog: FC<Props> = ({ open, onClose }) => {
 
   // Get the backend URL that will be used after save
   const getTargetBackendUrl = (): string => {
-    try {
-      if (chatCompletionEndPoint) {
-        return new URL(chatCompletionEndPoint).origin;
-      }
-    } catch (urlError) {
-      console.warn('🔗 Invalid chat completion URL format, using default');
-    }
-    return process.env.NEXT_PUBLIC_BACKEND_URL || 'https://127.0.0.1:8080';
+    console.log('getTargetBackendUrl called with chatCompletionEndPoint:', chatCompletionEndPoint);
+    
+    // Always use the correct local backend URL to avoid confusion
+    const correctBackendUrl = 'http://127.0.0.1:8081';
+    console.log('Using correct backend URL:', correctBackendUrl);
+    return correctBackendUrl;
   };
 
   // Handle MFA flow after JIRA validation
@@ -252,7 +276,7 @@ export const SettingDialog: FC<Props> = ({ open, onClose }) => {
       
       // Call the MFA setup API via proxy to bypass CSP restrictions
       const targetBackendUrl = getTargetBackendUrl();
-      console.log('🔧 Using MFA proxy with backend URL:', targetBackendUrl);
+      console.log(' Using MFA proxy with backend URL:', targetBackendUrl);
       
       const response = await fetch('/api/mfa-proxy', {
         method: 'POST',
@@ -269,14 +293,14 @@ export const SettingDialog: FC<Props> = ({ open, onClose }) => {
 
       if (response.ok) {
         const data = await response.json();
-        console.log('🔐 MFA setup response data:', data);
+        console.log(' MFA setup response data:', data);
         
         if (data.success) {
           // Handle different possible API response formats
           const qrCodeData = data.qr_code || data.qr_code_data || data.qrCode || '';
           
           if (!qrCodeData) {
-            console.warn('🔐 No QR code data in response:', Object.keys(data));
+            console.warn(' No QR code data in response:', Object.keys(data));
           }
           
           setMfaSetupData({
@@ -289,7 +313,7 @@ export const SettingDialog: FC<Props> = ({ open, onClose }) => {
             backup_codes: data.backup_codes || []
           });
           
-          console.log('🔐 Setting MFA setup data with QR code length:', qrCodeData.length);
+          console.log(' Setting MFA setup data with QR code length:', qrCodeData.length);
           setShowMfaSetup(true);
           setCurrentStep(''); // Clear step indicator when modal is shown
           return true; // Success - waiting for user input, not failure
@@ -298,7 +322,7 @@ export const SettingDialog: FC<Props> = ({ open, onClose }) => {
         }
       } else {
         const errorText = await response.text();
-        console.error('🔐 MFA setup HTTP error:', response.status, errorText);
+        console.error(' MFA setup HTTP error:', response.status, errorText);
         throw new Error(`MFA setup failed: ${response.status} - ${errorText}`);
       }
       
@@ -326,12 +350,12 @@ export const SettingDialog: FC<Props> = ({ open, onClose }) => {
 
     // Prevent multiple simultaneous validations
     if (isValidatingJira || errorCooldown) {
-      console.log('🔧 Validation already in progress or in cooldown, skipping');
+      console.log(' Validation already in progress or in cooldown, skipping');
       return false;
     }
 
     setCurrentStep('Validating JIRA...');
-    console.log('🔐 Validating JIRA credentials for user:', jiraUsernameValue);
+    console.log(' Validating JIRA credentials for user:', jiraUsernameValue);
     setIsValidatingJira(true);
     setLastErrorType(null);
 
@@ -348,7 +372,7 @@ export const SettingDialog: FC<Props> = ({ open, onClose }) => {
 
       if (!validation.isValid) {
         setCurrentStep('');
-        console.log('🔍 JIRA validation failed:', {
+        console.log(' JIRA validation failed:', {
           errorType: validation.error?.type,
           errorMessage: validation.error?.message,
           technicalDetails: validation.error?.technicalDetails,
@@ -374,12 +398,12 @@ export const SettingDialog: FC<Props> = ({ open, onClose }) => {
         return false; // Actual validation failure
       }
 
-      console.log('✅ JIRA credentials are valid, proceeding with MFA flow');
+      console.log(' JIRA credentials are valid, proceeding with MFA flow');
       
       // Update CSP to allow the backend URL before MFA flow
       try {
-        console.log('🔧 Updating CSP before MFA flow for URL:', targetBackendUrl);
-        console.log('🔧 Target backend URL details:', {
+        console.log(' Updating CSP before MFA flow for URL:', targetBackendUrl);
+        console.log(' Target backend URL details:', {
           targetBackendUrl,
           protocol: new URL(targetBackendUrl).protocol,
           hostname: new URL(targetBackendUrl).hostname,
@@ -388,7 +412,7 @@ export const SettingDialog: FC<Props> = ({ open, onClose }) => {
         updateCSPForBackend(targetBackendUrl);
         // Give the browser more time to process the CSP update
         await new Promise(resolve => setTimeout(resolve, 200));
-        console.log('🔧 CSP update completed, proceeding with MFA flow');
+        console.log(' CSP update completed, proceeding with MFA flow');
       } catch (error) {
         console.warn('Failed to update CSP before MFA flow:', error);
       }
@@ -491,9 +515,9 @@ export const SettingDialog: FC<Props> = ({ open, onClose }) => {
       setShowMfaSetup(true);
 
       if (setupData.is_existing) {
-        toast.success('🔐 Using your existing MFA setup. Enter a code from your authenticator app.');
+        toast.success('Using your existing MFA setup. Enter a code from your authenticator app.');
       } else {
-        toast.success('🔐 MFA setup initiated. Please scan the QR code and verify.');
+        toast.success('MFA setup initiated. Please scan the QR code and verify.');
       }
 
              return false; // Don't continue with save - wait for MFA verification
@@ -536,7 +560,7 @@ export const SettingDialog: FC<Props> = ({ open, onClose }) => {
       email: `${jiraUsernameValue}@nvidia.com`
     });
     setShowMfaVerify(true);
-    toast('🔐 Please verify your MFA to complete JIRA setup.');
+    toast('Please verify your MFA to complete JIRA setup.');
     return false; // Don't continue with save - wait for MFA verification
   };
 
@@ -561,11 +585,25 @@ export const SettingDialog: FC<Props> = ({ open, onClose }) => {
     safeSessionStorage.setItem('webSocketURL', webSocketEndPoint);
     safeSessionStorage.setItem('webSocketSchema', webSocketSchema);
     
+    // Also store in localStorage for new tab persistence
+    if (typeof window !== 'undefined' && window.localStorage) {
+      localStorage.setItem('chatCompletionURL', chatCompletionEndPoint);
+      localStorage.setItem('webSocketURL', webSocketEndPoint);
+      localStorage.setItem('webSocketSchema', webSocketSchema);
+      localStorage.setItem('backendUrl', chatCompletionEndPoint.replace('/chat/stream', ''));
+      
+      console.log('URLs saved to localStorage for new tab persistence:', {
+        chatURL: chatCompletionEndPoint,
+        webSocketURL: webSocketEndPoint,
+        backendURL: chatCompletionEndPoint.replace('/chat/stream', '')
+      });
+    }
+    
     // Update CSP to allow the new backend URL
     try {
-      console.log('🔧 Updating CSP for backend URL:', chatCompletionEndPoint);
+      console.log('Updating CSP for backend URL:', chatCompletionEndPoint);
       updateCSPForBackend(chatCompletionEndPoint);
-      console.log('✅ CSP update completed');
+      console.log('CSP update completed');
     } catch (error) {
       console.warn('Failed to update CSP:', error);
     }
@@ -591,7 +629,7 @@ export const SettingDialog: FC<Props> = ({ open, onClose }) => {
     
     const backendUrlForMFA = getBackendUrlForMFA();
     safeSessionStorage.setItem('backendUrl', backendUrlForMFA);
-    console.log('🔧 Settings: Storing backend URL for MFA/API calls:', backendUrlForMFA);
+    console.log('Settings: Storing backend URL for MFA/API calls:', backendUrlForMFA);
     
     safeSessionStorage.setItem('expandIntermediateSteps', String(detailsToggle));
     safeSessionStorage.setItem('intermediateStepOverride', String(intermediateStepOverrideToggle));
@@ -606,11 +644,11 @@ export const SettingDialog: FC<Props> = ({ open, onClose }) => {
   // Main save handler - much cleaner and more linear
   const handleSave = async () => {
     if (isSaving || isValidatingJira || isCheckingMfa) {
-      console.log('🔧 Save already in progress or validation running, skipping');
+      console.log('Save already in progress or validation running, skipping');
       return; // Prevent double-clicking and overlapping operations
     }
     
-    console.log('🔧 Starting save process...');
+    console.log('Starting save process...');
     setIsSaving(true);
     setLastErrorType(null);
 
@@ -618,7 +656,7 @@ export const SettingDialog: FC<Props> = ({ open, onClose }) => {
       // Step 0: Update CSP early to allow backend connections
       const targetBackendUrl = getTargetBackendUrl();
       try {
-        console.log('🔧 Updating CSP early for URL:', targetBackendUrl);
+        console.log(' Updating CSP early for URL:', targetBackendUrl);
         updateCSPForBackend(targetBackendUrl);
       } catch (error) {
         console.warn('Failed to update CSP early:', error);
@@ -630,16 +668,16 @@ export const SettingDialog: FC<Props> = ({ open, onClose }) => {
       }
 
       // Step 2: Save basic settings immediately (don't wait for JIRA validation)
-      console.log('🔧 Saving basic application settings...');
+      console.log(' Saving basic application settings...');
       saveApplicationSettings();
 
       // Step 3: If JIRA credentials provided, validate and handle MFA
       if (jiraUsernameValue && jiraTokenValue) {
-        console.log('🔧 JIRA credentials provided, starting validation...');
+        console.log(' JIRA credentials provided, starting validation...');
         const shouldProceed = await validateAndProcessJiraCredentials();
         if (!shouldProceed) {
           // Only show warning if validation actually failed
-          console.log('🔧 JIRA validation failed, but basic settings were saved');
+          console.log(' JIRA validation failed, but basic settings were saved');
           toast('Basic settings saved', {
               icon: '⚙️',
             });
@@ -647,7 +685,7 @@ export const SettingDialog: FC<Props> = ({ open, onClose }) => {
         }
         // If shouldProceed is true, either JIRA is complete OR MFA modal is waiting
         // Don't show any message yet - let MFA completion handle it
-        console.log('🔧 JIRA credentials validated, MFA flow initiated');
+        console.log(' JIRA credentials validated, MFA flow initiated');
         return; // Wait for MFA completion
       } else {
         // No JIRA credentials, just finish with basic settings
@@ -683,7 +721,7 @@ export const SettingDialog: FC<Props> = ({ open, onClose }) => {
   const handleRecoveryActions = (errorType: string) => {
     // Remove duplicate toasts - the main error toast already handles user messaging
     // This function is now just for internal error categorization
-    console.log(`🔧 Error recovery triggered for type: ${errorType}`);
+    console.log(` Error recovery triggered for type: ${errorType}`);
   };
 
   const handleClearJira = async () => {
@@ -714,7 +752,7 @@ export const SettingDialog: FC<Props> = ({ open, onClose }) => {
         });
         clearedItems.push('MFA session');
       } catch (error) {
-        console.warn('🔧 Could not clear MFA session (this is expected if server is not running)');
+        console.warn(' Could not clear MFA session (this is expected if server is not running)');
       }
 
       // Clear any stored MFA state
@@ -727,7 +765,7 @@ export const SettingDialog: FC<Props> = ({ open, onClose }) => {
           sessionStorage.removeItem(key);
         });
       } catch (error) {
-        console.warn('🔧 Could not clear session storage items:', error);
+        console.warn(' Could not clear session storage items:', error);
       }
 
       // Dispatch events to notify other components about the clearing
@@ -739,8 +777,8 @@ export const SettingDialog: FC<Props> = ({ open, onClose }) => {
       console.log('🧹 All JIRA credential data cleared successfully');
       
     } catch (error) {
-      console.error('🔧 Error during clear operation:', error);
-      toast.error('❌ Error clearing data');
+      console.error(' Error during clear operation:', error);
+      toast.error(' Error clearing data');
     }
   };
 
@@ -756,13 +794,13 @@ export const SettingDialog: FC<Props> = ({ open, onClose }) => {
     // Get user ID first
     const currentUserId = isVerifyOnly ? mfaVerifyData?.username : mfaSetupData?.username;
     if (!currentUserId) {
-      toast.error('❌ User information missing for MFA verification');
+      toast.error(' User information missing for MFA verification');
       return;
     }
 
     // Prevent multiple simultaneous MFA checks for this user
     if (isCheckingMfa || isMFAOperationInProgress(currentUserId)) {
-      console.log('🔧 MFA verification already in progress for user, skipping');
+      console.log(' MFA verification already in progress for user, skipping');
       return;
     }
 
@@ -773,7 +811,7 @@ export const SettingDialog: FC<Props> = ({ open, onClose }) => {
     }
 
     setCurrentStep('Verifying MFA code...');
-    console.log('🔐 MFA Verification starting for user:', currentUserId);
+    console.log(' MFA Verification starting for user:', currentUserId);
     setIsCheckingMfa(true);
 
     try {
@@ -798,11 +836,11 @@ export const SettingDialog: FC<Props> = ({ open, onClose }) => {
       });
 
       clearTimeout(timeoutId);
-      console.log('🔐 MFA verification response status:', response.status);
+      console.log(' MFA verification response status:', response.status);
 
       if (response.ok) {
         const data = await response.json();
-        console.log('🔐 MFA verification response data:', data);
+        console.log(' MFA verification response data:', data);
         
         if (data.success) {
           setCurrentStep('MFA verified - Saving JIRA credentials...');
@@ -823,7 +861,7 @@ export const SettingDialog: FC<Props> = ({ open, onClose }) => {
         } else {
           setCurrentStep('');
           const backendError = data.error || 'Invalid MFA code';
-          console.log('🔐 MFA verification failed:', backendError);
+          console.log(' MFA verification failed:', backendError);
           toast.custom((t) => (
             <div className={`bg-white border border-red-200 px-4 py-3 rounded-lg shadow-md max-w-md text-center ${t.visible ? 'animate-fade-in' : 'animate-fade-out'}`}>
               <div className="text-red-600 font-medium">{backendError}. Please try again.</div>
@@ -837,7 +875,7 @@ export const SettingDialog: FC<Props> = ({ open, onClose }) => {
       } else {
         setCurrentStep('');
         const errorData = await response.json().catch(() => ({}));
-        console.error('🔐 MFA verification failed:', response.status, errorData);
+        console.error(' MFA verification failed:', response.status, errorData);
         
         // Only show error if we haven't shown one recently
         if (!errorCooldown) {
@@ -879,14 +917,14 @@ export const SettingDialog: FC<Props> = ({ open, onClose }) => {
 
   const continueJiraSave = async () => {
     if (isSaving) {
-      console.log('🔧 JIRA save already in progress, skipping');
+      console.log(' JIRA save already in progress, skipping');
       return;
     }
 
     try {
       setIsSaving(true);
       setCurrentStep('Saving JIRA credentials securely...');
-      console.log('🔐 Final JIRA save step: Testing connection and saving credentials');
+      console.log(' Final JIRA save step: Testing connection and saving credentials');
       
       // Use the same target backend URL for consistency
       const targetBackendUrl = getTargetBackendUrl();
@@ -908,12 +946,12 @@ export const SettingDialog: FC<Props> = ({ open, onClose }) => {
       });
 
       if (response.ok) {
-        console.log('🔍 MFA Setup: Storing JIRA credentials after successful MFA verification');
+        console.log(' MFA Setup: Storing JIRA credentials after successful MFA verification');
         await setSecureJIRACredentials({ username: jiraUsernameValue, token: jiraTokenValue });
         
         // Verify credentials were stored
         const storedDataJSON = sessionStorage.getItem('jira-credentials');
-        console.log('🔍 MFA Setup: Credentials storage verification:', {
+        console.log(' MFA Setup: Credentials storage verification:', {
           hasStoredData: !!storedDataJSON,
           storedDataLength: storedDataJSON?.length || 0
         });
@@ -980,7 +1018,7 @@ export const SettingDialog: FC<Props> = ({ open, onClose }) => {
           {/* General Settings */}
           <div className="space-y-4">
             <h3 className="text-base font-semibold text-gray-900 dark:text-white flex items-center space-x-2">
-              <span>⚙️</span>
+              <span>⚙</span>
               <span>General Settings</span>
             </h3>
 
@@ -1206,7 +1244,7 @@ export const SettingDialog: FC<Props> = ({ open, onClose }) => {
           >
             <div className="p-8">
               <div className="flex items-center justify-between mb-6">
-                <h3 className="text-2xl font-bold text-gray-900 dark:text-white">🔐 Complete MFA Setup</h3>
+                <h3 className="text-2xl font-bold text-gray-900 dark:text-white">Complete MFA Setup</h3>
                 <button
                   type="button"
                   onMouseDown={(e) => {
@@ -1340,7 +1378,7 @@ export const SettingDialog: FC<Props> = ({ open, onClose }) => {
       )}
 
       {/* MFA Verification Modal */}
-      {console.log('🔍 Debug: Checking MFA modal render condition:', {
+      {console.log(' Debug: Checking MFA modal render condition:', {
         showMfaVerify: showMfaVerify,
         mfaVerifyData: mfaVerifyData,
         condition: !!(showMfaVerify && mfaVerifyData)
