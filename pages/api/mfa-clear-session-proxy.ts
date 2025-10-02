@@ -12,11 +12,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     console.log('🔧 MFA Clear Session Proxy: Forwarding request to:', `${backendUrl}/api/mfa/clear-session`);
     
     // Forward the request to the actual backend
+    // Forward cookies for JWT session validation
+    const forwardHeaders: any = {
+      'Content-Type': 'application/json',
+    };
+    
+    if (req.headers.cookie) {
+      forwardHeaders['Cookie'] = req.headers.cookie;
+    }
+    
     const response = await fetch(`${backendUrl}/api/mfa/clear-session`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers: forwardHeaders,
       body: JSON.stringify(req.body),
     });
 

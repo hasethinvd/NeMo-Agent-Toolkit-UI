@@ -12,12 +12,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     console.log('🔧 MFA JIRA Test Proxy: Forwarding request to:', `${backendUrl}/api/mfa/jira/test-connection`);
     
     // Forward the request to the actual backend
+    // Forward cookies for JWT session validation
+    const forwardHeaders: any = {
+      'Content-Type': 'application/json',
+      'Authorization': req.headers.authorization || '',
+    };
+    
+    if (req.headers.cookie) {
+      forwardHeaders['Cookie'] = req.headers.cookie;
+    }
+    
     const response = await fetch(`${backendUrl}/api/mfa/jira/test-connection`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': req.headers.authorization || '',
-      },
+      headers: forwardHeaders,
       body: JSON.stringify(req.body),
     });
 
