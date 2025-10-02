@@ -18,7 +18,7 @@ const R_KEY = 'key-rotation-schedule'; // Key for rotation schedule
 
 // Key rotation configuration
 const KEY_ROTATION_INTERVAL = 60 * 60 * 1000; // 1 hour in milliseconds  
-const CREDENTIAL_EXPIRY = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
+// CREDENTIAL_EXPIRY is now configurable via MFA config (default 7 days to match MFA sessions)
 
 // Get storage interface based on MFA config
 async function getJiraStorage() {
@@ -287,6 +287,7 @@ export const setSecureJIRACredentials = async (credentials: JIRACredentials) => 
       rotationSchedule: rotationData.nextRotation || new Date(now.getTime() + KEY_ROTATION_INTERVAL).toISOString()
     };
 
+
     const storage = await getJiraStorage();
     storage.setItem(C_KEY, JSON.stringify(storedData));
     console.log(`JIRA credentials securely stored with key version ${keyVersion} in ${storage.type}`);
@@ -321,12 +322,15 @@ export const getSecureJIRACredentials = async (): Promise<JIRACredentials | null
     const storedData: StoredEncryptedData = JSON.parse(storedDataJSON);
     const { iv, salt, data, timestamp, keyVersion = 1 } = storedData;
 
-    // Check for expiration (24 hours)
+    // Check for expiration using configurable timeout (matches MFA session timeout)
+    const config = await getMFAConfig();
+    const credentialExpiry = (config.session_timeout || 604800) * 1000; // Convert to milliseconds
+    
     const storedTime = new Date(timestamp).getTime();
     const now = new Date().getTime();
-    if (now - storedTime > CREDENTIAL_EXPIRY) {
-      console.log('🕒 JIRA credentials expired.');
-      clearJIRACredentials();
+    if (now - storedTime > credentialExpiry) {
+      console.log(`JIRA credentials expired after ${credentialExpiry / (24 * 60 * 60 * 1000)} days.`);
+      await clearJIRACredentials();
       return null;
     }
 
@@ -450,7 +454,9 @@ export const getJIRACredentialStatus = (): { expires?: Date, fingerprint?: strin
     const { timestamp, fingerprint, keyVersion = 1, rotationSchedule } = storedData;
 
     const storedTime = new Date(timestamp);
-    const expirationTime = new Date(storedTime.getTime() + CREDENTIAL_EXPIRY);
+    // Use 7 days default for credential expiry (matches MFA config default)
+    const credentialExpiry = 7 * 24 * 60 * 60 * 1000; // 7 days in milliseconds
+    const expirationTime = new Date(storedTime.getTime() + credentialExpiry);
 
     if (new Date() > expirationTime) {
         clearJIRACredentials();

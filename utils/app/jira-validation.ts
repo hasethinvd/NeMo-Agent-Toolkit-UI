@@ -181,7 +181,7 @@ export const checkBackendAvailability = async (backendUrl?: string): Promise<boo
         ? sessionStorage.getItem('chatCompletionURL') 
         : null;
       
-      targetUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'https://127.0.0.1:8001'; // use env var or fallback to 9001
+      targetUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://127.0.0.1:8081'; // use env var or fallback to 8081
       
       if (storedChatURL) {
         // Extract base URL from stored chat completion URL

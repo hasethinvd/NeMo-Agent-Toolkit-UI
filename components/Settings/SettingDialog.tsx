@@ -141,21 +141,29 @@ export const SettingDialog: FC<Props> = ({ open, onClose }) => {
   // Load saved URLs from localStorage on component mount
   useEffect(() => {
     const loadSavedSettings = () => {
-      // Load URLs from localStorage first (persists across tabs)
+      // Priority 1: Environment variables (take precedence)
+      const envChatURL = process.env.NEXT_PUBLIC_HTTP_CHAT_COMPLETION_URL;
+      const envWebSocketURL = process.env.NEXT_PUBLIC_WS_CHAT_COMPLETION_URL;
+      
+      // Priority 2: localStorage (fallback for manual overrides)
       const savedChatURL = localStorage.getItem('chatCompletionURL');
       const savedWebSocketURL = localStorage.getItem('webSocketURL');
       const savedWebSocketSchema = localStorage.getItem('webSocketSchema');
       
-      if (savedChatURL && savedChatURL !== chatCompletionEndPoint) {
-        setChatCompletionEndPoint(savedChatURL);
-        homeDispatch({ field: 'chatCompletionURL', value: savedChatURL });
-        console.log('Loaded chat URL from localStorage:', savedChatURL);
+      // Use environment variables first, then localStorage
+      const finalChatURL = envChatURL || savedChatURL;
+      const finalWebSocketURL = envWebSocketURL || savedWebSocketURL;
+      
+      if (finalChatURL && finalChatURL !== chatCompletionEndPoint) {
+        setChatCompletionEndPoint(finalChatURL);
+        homeDispatch({ field: 'chatCompletionURL', value: finalChatURL });
+        console.log('Loaded chat URL:', finalChatURL, envChatURL ? '(from env)' : '(from localStorage)');
       }
       
-      if (savedWebSocketURL && savedWebSocketURL !== webSocketEndPoint) {
-        setWebSocketEndPoint(savedWebSocketURL);
-        homeDispatch({ field: 'webSocketURL', value: savedWebSocketURL });
-        console.log('Loaded WebSocket URL from localStorage:', savedWebSocketURL);
+      if (finalWebSocketURL && finalWebSocketURL !== webSocketEndPoint) {
+        setWebSocketEndPoint(finalWebSocketURL);
+        homeDispatch({ field: 'webSocketURL', value: finalWebSocketURL });
+        console.log('Loaded WebSocket URL:', finalWebSocketURL, envWebSocketURL ? '(from env)' : '(from localStorage)');
       }
       
       if (savedWebSocketSchema && savedWebSocketSchema !== webSocketSchema) {

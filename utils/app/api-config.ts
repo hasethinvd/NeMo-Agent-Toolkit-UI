@@ -220,10 +220,10 @@ export function getBackendUrl(): string {
     return getApiBaseUrl();
   }
   
-  // Second priority: Explicit backend URL from localStorage/sessionStorage (set by settings)
-  const storedBackendUrl = localStorage.getItem('backendUrl') || sessionStorage.getItem('backendUrl');
-  if (storedBackendUrl) {
-    return storedBackendUrl;
+  // Second priority: Environment variables (now takes precedence over localStorage)
+  const envBackendUrl = process.env.NEXT_PUBLIC_BACKEND_URL;
+  if (envBackendUrl) {
+    return envBackendUrl;
   }
   
   // Third priority: Environment-based detection
@@ -232,16 +232,31 @@ export function getBackendUrl(): string {
   if (hostname.includes('tpm.prd.astra.nvidia.com') || hostname.includes('astra.nvidia.com')) {
     return 'https://tpm-nat.prd.astra.nvidia.com';
   }
-  // For localhost, prefer previously discovered URL over hardcoded fallback
-  // (Skip this priority to avoid overriding discovered URLs)
   
-  // Fourth priority: Previously discovered backend URL (check localStorage first for persistence)
+  // Fourth priority: Current chat completion URL from environment variables
+  const envChatURL = process.env.NEXT_PUBLIC_HTTP_CHAT_COMPLETION_URL;
+  if (envChatURL) {
+    try {
+      const url = new URL(envChatURL);
+      return `${url.protocol}//${url.host}`;
+    } catch (error) {
+      console.warn('Invalid environment chat URL:', envChatURL);
+    }
+  }
+  
+  // Fifth priority: Explicit backend URL from localStorage/sessionStorage (set by UI settings)
+  const storedBackendUrl = localStorage.getItem('backendUrl') || sessionStorage.getItem('backendUrl');
+  if (storedBackendUrl) {
+    return storedBackendUrl;
+  }
+  
+  // Sixth priority: Previously discovered backend URL (check localStorage for persistence)
   const storedDiscoveredUrl = localStorage.getItem('discoveredBackendUrl') || sessionStorage.getItem('discoveredBackendUrl');
   if (storedDiscoveredUrl) {
     return storedDiscoveredUrl;
   }
   
-  // Fifth priority: Current chat completion URL from localStorage/sessionStorage (UI settings)
+  // Seventh priority: Current chat completion URL from localStorage/sessionStorage (UI settings)
   const storedChatURL = localStorage.getItem('chatCompletionURL') || sessionStorage.getItem('chatCompletionURL');
   if (storedChatURL) {
     try {
@@ -250,12 +265,6 @@ export function getBackendUrl(): string {
     } catch (error) {
       console.warn('Invalid stored chat URL:', storedChatURL);
     }
-  }
-  
-  // Sixth priority: Environment variable base URL
-  const envBackendUrl = process.env.NEXT_PUBLIC_BACKEND_URL;
-  if (envBackendUrl) {
-    return envBackendUrl;
   }
   
   // Final fallback: Use discovery mechanism
