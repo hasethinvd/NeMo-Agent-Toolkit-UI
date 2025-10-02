@@ -25,7 +25,7 @@ export const JiraStatus: FC<Props> = ({ className = '' }) => {
         // Also validate with backend using JWT cookies to check active session
         try {
           // Get the correct backend URL dynamically
-          const { getBackendUrl } = await import('../utils/app/api-config');
+          const { getBackendUrl } = await import('../../utils/app/api-config');
           const backendUrl = getBackendUrl();
           
           const response = await fetch('/api/mfa-jira-test-proxy', {

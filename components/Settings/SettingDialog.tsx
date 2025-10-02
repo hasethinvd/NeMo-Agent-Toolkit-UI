@@ -175,7 +175,7 @@ export const SettingDialog: FC<Props> = ({ open, onClose }) => {
         // Check MFA status using consistent backend URL resolution
         try {
           const backendUrl = getTargetBackendUrl();
-          console.log(' Using target backend URL for MFA status:', backendUrl);
+          console.log('Using target backend URL for MFA status:', backendUrl);
           
           const mfaResponse = await fetch(`/api/mfa-status-proxy?user_id=${userId}`, {
             method: 'GET',
@@ -246,14 +246,12 @@ export const SettingDialog: FC<Props> = ({ open, onClose }) => {
 
   // Get the backend URL that will be used after save
   const getTargetBackendUrl = (): string => {
-    try {
-      if (chatCompletionEndPoint) {
-        return new URL(chatCompletionEndPoint).origin;
-      }
-    } catch (urlError) {
-      console.warn('Invalid chat completion URL format, using default');
-    }
-    return process.env.NEXT_PUBLIC_BACKEND_URL || 'https://127.0.0.1:8080';
+    console.log('getTargetBackendUrl called with chatCompletionEndPoint:', chatCompletionEndPoint);
+    
+    // Always use the correct local backend URL to avoid confusion
+    const correctBackendUrl = 'http://127.0.0.1:8081';
+    console.log('Using correct backend URL:', correctBackendUrl);
+    return correctBackendUrl;
   };
 
   // Handle MFA flow after JIRA validation

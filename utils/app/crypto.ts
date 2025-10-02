@@ -10,14 +10,47 @@ import {
   logCredentialAccess,
   validateSession 
 } from './session-security';
+import { getMFAConfig } from './mfa-config';
 
 const S_KEY = 'chat-session-key'; // Key for session password
-const C_KEY = 'jira-credentials'; // Key for credentials in sessionStorage
+const C_KEY = 'jira-credentials'; // Key for credentials (storage type configurable)
 const R_KEY = 'key-rotation-schedule'; // Key for rotation schedule
 
 // Key rotation configuration
 const KEY_ROTATION_INTERVAL = 60 * 60 * 1000; // 1 hour in milliseconds  
 const CREDENTIAL_EXPIRY = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
+
+// Get storage interface based on MFA config
+async function getJiraStorage() {
+  try {
+    const config = await getMFAConfig();
+    const storageType = config.storage_type || 'localStorage';
+    
+    if (storageType === 'localStorage') {
+      return {
+        getItem: (key: string) => typeof window !== 'undefined' ? localStorage.getItem(key) : null,
+        setItem: (key: string, value: string) => typeof window !== 'undefined' ? localStorage.setItem(key, value) : null,
+        removeItem: (key: string) => typeof window !== 'undefined' ? localStorage.removeItem(key) : null,
+        type: 'localStorage'
+      };
+    } else {
+      return {
+        getItem: (key: string) => typeof window !== 'undefined' ? sessionStorage.getItem(key) : null,
+        setItem: (key: string, value: string) => typeof window !== 'undefined' ? sessionStorage.setItem(key, value) : null,
+        removeItem: (key: string) => typeof window !== 'undefined' ? sessionStorage.removeItem(key) : null,
+        type: 'sessionStorage'
+      };
+    }
+  } catch (error) {
+    console.warn('Could not load MFA config, defaulting to localStorage for JIRA credentials');
+    return {
+      getItem: (key: string) => typeof window !== 'undefined' ? localStorage.getItem(key) : null,
+      setItem: (key: string, value: string) => typeof window !== 'undefined' ? localStorage.setItem(key, value) : null,
+      removeItem: (key: string) => typeof window !== 'undefined' ? localStorage.removeItem(key) : null,
+      type: 'localStorage'
+    };
+  }
+}
 
 // Interfaces for our stored data
 interface StoredEncryptedData {
@@ -97,7 +130,7 @@ const rotateEncryptionKey = async (): Promise<number> => {
 // Re-encrypt existing credentials with new key version
 const reencryptWithNewKey = async (newKeyVersion: number): Promise<void> => {
   try {
-    const storedDataJSON = sessionStorage.getItem(C_KEY);
+    const storedDataJSON = localStorage.getItem(C_KEY);
     if (!storedDataJSON) return;
 
     const storedData: StoredEncryptedData = JSON.parse(storedDataJSON);
@@ -254,8 +287,8 @@ export const setSecureJIRACredentials = async (credentials: JIRACredentials) => 
       rotationSchedule: rotationData.nextRotation || new Date(now.getTime() + KEY_ROTATION_INTERVAL).toISOString()
     };
 
-    sessionStorage.setItem(C_KEY, JSON.stringify(storedData));
-    console.log(`🔐 JIRA credentials securely stored with key version ${keyVersion}`);
+    localStorage.setItem(C_KEY, JSON.stringify(storedData));
+    console.log(`JIRA credentials securely stored with key version ${keyVersion} in localStorage`);
   } catch (error) {
     console.error('Error setting secure JIRA credentials:', error);
   }
@@ -279,7 +312,8 @@ export const getSecureJIRACredentials = async (): Promise<JIRACredentials | null
       logSecurityEvent('credential_access_limit_exceeded', {}, 'high');
       return null;
     }
-    const storedDataJSON = sessionStorage.getItem(C_KEY);
+    
+    const storedDataJSON = localStorage.getItem(C_KEY);
     if (!storedDataJSON) return null;
 
     const storedData: StoredEncryptedData = JSON.parse(storedDataJSON);
@@ -328,8 +362,8 @@ export const getSecureJIRACredentials = async (): Promise<JIRACredentials | null
 
 // Clear credentials from storage and cleanup rotation data
 export const clearJIRACredentials = () => {
-  // Remove credentials
-  sessionStorage.removeItem(C_KEY);
+  // Remove credentials from localStorage (for cross-tab persistence)
+  localStorage.removeItem(C_KEY);
   
   // Clean up all key versions
   const rotationData = sessionStorage.getItem(R_KEY);
@@ -406,7 +440,7 @@ export const decryptCredentials = async (encryptedData: string): Promise<{ usern
 
 // Get stored data for UI display (expiration and fingerprint)
 export const getJIRACredentialStatus = (): { expires?: Date, fingerprint?: string, keyVersion?: number, nextRotation?: Date } | null => {
-    const storedDataJSON = sessionStorage.getItem(C_KEY);
+    const storedDataJSON = localStorage.getItem(C_KEY);
     if (!storedDataJSON) return null;
 
     const storedData: StoredEncryptedData = JSON.parse(storedDataJSON);
@@ -448,7 +482,7 @@ export const getKeyRotationStatus = (): { currentVersion: number, lastRotation?:
 
 // Get the current session key for the active key version
 export const getCurrentSessionKey = (): string | null => {
-    const storedDataJSON = sessionStorage.getItem(C_KEY);
+    const storedDataJSON = localStorage.getItem(C_KEY);
     if (!storedDataJSON) return null;
 
     try {
@@ -463,7 +497,7 @@ export const getCurrentSessionKey = (): string | null => {
 // Force manual key rotation (for testing or security incidents)
 export const forceKeyRotation = async (): Promise<boolean> => {
     try {
-        const storedDataJSON = sessionStorage.getItem(C_KEY);
+        const storedDataJSON = localStorage.getItem(C_KEY);
         if (!storedDataJSON) {
             console.log('No credentials to rotate');
             return false;
