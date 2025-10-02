@@ -15,7 +15,16 @@ RUN npm i
 FROM base AS builder
 WORKDIR /app
 
-# No build-time environment variables needed - using runtime environment variables
+# Accept build-time environment variables
+ARG NEXT_PUBLIC_HTTP_CHAT_COMPLETION_URL
+ARG NEXT_PUBLIC_WS_CHAT_COMPLETION_URL
+ARG NEXT_PUBLIC_WEB_SOCKET_DEFAULT_ON
+
+# Set them as environment variables for the build
+ENV NEXT_PUBLIC_HTTP_CHAT_COMPLETION_URL=$NEXT_PUBLIC_HTTP_CHAT_COMPLETION_URL
+ENV NEXT_PUBLIC_WS_CHAT_COMPLETION_URL=$NEXT_PUBLIC_WS_CHAT_COMPLETION_URL
+ENV NEXT_PUBLIC_WEB_SOCKET_DEFAULT_ON=$NEXT_PUBLIC_WEB_SOCKET_DEFAULT_ON
+
 
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .

@@ -21,7 +21,7 @@ import {
   endMFAVerification,
   isMFAOperationInProgress
 } from '@/utils/app/mfa-state';
-
+import { DEFAULT_CHAT_COMPLETION_URL, DEFAULT_WEBSOCKET_URL } from '@/constants/constants';
 
 interface Props {
   open: boolean;
@@ -92,9 +92,24 @@ export const SettingDialog: FC<Props> = ({ open, onClose }) => {
     const storedExpandSteps = safeSessionStorage.getItem('expandIntermediateSteps');
     const storedStepOverride = safeSessionStorage.getItem('intermediateStepOverride');
 
-    // Use environment variables as defaults, sessionStorage as overrides
-    const envChatURL = process.env.NEXT_PUBLIC_HTTP_CHAT_COMPLETION_URL || '';
-    const envWebSocketURL = process.env.NEXT_PUBLIC_WS_CHAT_COMPLETION_URL || '';
+    // Use environment variables as defaults, with fallback to constants
+    const envChatURL = process.env.NEXT_PUBLIC_HTTP_CHAT_COMPLETION_URL || DEFAULT_CHAT_COMPLETION_URL;
+    const envWebSocketURL = process.env.NEXT_PUBLIC_WS_CHAT_COMPLETION_URL || DEFAULT_WEBSOCKET_URL;
+
+    // Add debug logging
+    console.log('🔍 Environment Variables Debug:');
+    console.log('  NEXT_PUBLIC_HTTP_CHAT_COMPLETION_URL:', process.env.NEXT_PUBLIC_HTTP_CHAT_COMPLETION_URL);
+    console.log('  NEXT_PUBLIC_WS_CHAT_COMPLETION_URL:', process.env.NEXT_PUBLIC_WS_CHAT_COMPLETION_URL);
+    console.log('  envChatURL:', envChatURL);
+    console.log('  envWebSocketURL:', envWebSocketURL);
+
+    console.log('🔍 SessionStorage Values:');
+    console.log('  storedChatURL:', storedChatURL);
+    console.log('  storedWebSocketURL:', storedWebSocketURL);
+
+    console.log('🔍 Final Values Used:');
+    console.log('  Final chatURL:', storedChatURL || envChatURL || '');
+    console.log('  Final webSocketURL:', storedWebSocketURL || envWebSocketURL || '');
     
     setChatCompletionEndPoint(storedChatURL || envChatURL || '');
     setWebSocketEndPoint(storedWebSocketURL || envWebSocketURL || '');

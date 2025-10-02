@@ -6,3 +6,20 @@ tests/
 .idea
 out/
 k8s
+
+# Environment files - don't copy these into Docker image
+.env
+.env.local
+.env.development
+.env.production
+.env.staging
+.env.test
+*.env.local
+*.env.backup
+*.env.bk
+
+# Local development files
+local_env
+lucy_local_env
+v1.env.local
+
