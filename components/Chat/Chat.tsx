@@ -692,10 +692,17 @@ export const Chat = () => {
           
           let jiraCredentialsForWS: any = undefined;
 
-          if (storedDataJSON) {
+          // Get credentials from correct storage (localStorage or sessionStorage based on config)
+          const { getMFAConfig } = await import('@/utils/app/mfa-config');
+          const mfaConfig = await getMFAConfig();
+          const storageType = mfaConfig.storage_type || 'localStorage';
+          const credStorage = storageType === 'localStorage' ? localStorage : sessionStorage;
+          const credStoredDataJSON = credStorage.getItem('jira-credentials');
+
+          if (credStoredDataJSON) {
             // Include credentials in body for WebSocket (WebSocket doesn't support custom headers)
             try {
-              const storedData = JSON.parse(storedDataJSON);
+              const storedData = JSON.parse(credStoredDataJSON);
               // Check if credentials are expired before sending
               const storedTime = new Date(storedData.timestamp).getTime();
               const now = new Date().getTime();
@@ -708,7 +715,8 @@ export const Chat = () => {
                   console.log('🔍 Chat: JIRA credentials loaded for WebSocket request:', {
                     hasCredentials: true,
                     authMethod: useHeaderAuth ? 'header' : 'body',
-                    note: 'WebSocket always uses body auth regardless of header setting'
+                    note: 'WebSocket always uses body auth regardless of header setting',
+                    storageType: storageType
                   });
                   
                   // Send encrypted data to server for decryption
@@ -726,7 +734,7 @@ export const Chat = () => {
               console.error('Error preparing encrypted JIRA credentials for WebSocket:', error);
             }
           } else {
-            console.log('🔍 Chat: No JIRA credentials found in sessionStorage');
+            console.log(`🔍 Chat: No JIRA credentials found in ${storageType}`);
           }
 
           const wsMessage = {
@@ -747,7 +755,11 @@ export const Chat = () => {
         }
 
         // Get encrypted credentials data directly from storage (don't decrypt on client)
-        const storedDataJSON = sessionStorage.getItem('jira-credentials');
+        const { getMFAConfig: getMFAConfigHTTP } = await import('@/utils/app/mfa-config');
+        const mfaConfigHTTP = await getMFAConfigHTTP();
+        const storageTypeHTTP = mfaConfigHTTP.storage_type || 'localStorage';
+        const credStorageHTTP = storageTypeHTTP === 'localStorage' ? localStorage : sessionStorage;
+        const storedDataJSON = credStorageHTTP.getItem('jira-credentials');
         let jiraCredentialsForBody: ChatBody['jiraCredentials'];
 
         if (storedDataJSON) {
@@ -762,6 +774,7 @@ export const Chat = () => {
               const sessionKey = getCurrentSessionKey();
               
               if (sessionKey) {
+                console.log(`🔍 Chat HTTP: JIRA credentials loaded from ${storageTypeHTTP}`);
                 // Send encrypted data to server for decryption
                 jiraCredentialsForBody = { 
                   encrypted: JSON.stringify({
@@ -776,6 +789,8 @@ export const Chat = () => {
           } catch (error) {
             console.error('Error preparing encrypted JIRA credentials:', error);
           }
+        } else {
+          console.log(`🔍 Chat HTTP: No JIRA credentials found in ${storageTypeHTTP}`);
         }
 
         // cleaning up messages to fit the request payload
