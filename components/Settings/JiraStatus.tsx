@@ -27,9 +27,35 @@ export const JiraStatus: FC<Props> = ({ className = '' }) => {
         
         // Also validate with backend using JWT cookies to check active session
         try {
-          // Get the correct backend URL and auth method dynamically
-          const { getBackendUrl, shouldUseHeaderAuth } = await import('../../utils/app/api-config');
-          const backendUrl = getBackendUrl();
+          // Get backend URL with UI priority (check if SettingDialog has UI form values)
+          const { shouldUseHeaderAuth } = await import('../../utils/app/api-config');
+          
+          // Check if we can get the backend URL from UI settings (highest priority)
+          let backendUrl = 'http://localhost:8080'; // fallback
+          
+          // Try to get the current UI form value if SettingDialog is open
+          const chatURLFromStorage = localStorage.getItem('chatCompletionURL');
+          if (chatURLFromStorage) {
+            try {
+              const url = new URL(chatURLFromStorage);
+              backendUrl = `${url.protocol}//${url.host}`;
+              console.log('JIRA Status: Using backend URL from localStorage (UI settings):', backendUrl);
+            } catch (error) {
+              console.warn('Invalid stored chat URL:', chatURLFromStorage);
+            }
+          } else {
+            // Fallback to environment variables
+            if (process.env.NEXT_PUBLIC_HTTP_CHAT_COMPLETION_URL) {
+              try {
+                const url = new URL(process.env.NEXT_PUBLIC_HTTP_CHAT_COMPLETION_URL);
+                backendUrl = `${url.protocol}//${url.host}`;
+                console.log('JIRA Status: Using backend URL from environment:', backendUrl);
+              } catch (error) {
+                console.warn('Invalid environment chat URL:', process.env.NEXT_PUBLIC_HTTP_CHAT_COMPLETION_URL);
+              }
+            }
+          }
+          
           const useHeaderAuth = await shouldUseHeaderAuth();
           
           let headers: any = {

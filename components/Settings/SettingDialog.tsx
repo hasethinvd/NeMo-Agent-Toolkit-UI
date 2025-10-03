@@ -22,6 +22,7 @@ import {
   isMFAOperationInProgress
 } from '@/utils/app/mfa-state';
 import { DEFAULT_CHAT_COMPLETION_URL, DEFAULT_WEBSOCKET_URL } from '@/constants/constants';
+import { ServerEnvVars } from '@/types/env';
 
 interface Props {
   open: boolean;
@@ -85,34 +86,91 @@ export const SettingDialog: FC<Props> = ({ open, onClose }) => {
   // Load values from sessionStorage after component mounts (client-side only)
   // Prioritize environment variables over sessionStorage for URL values
   useEffect(() => {
-    const storedChatURL = safeSessionStorage.getItem('chatCompletionURL');
-    const storedWebSocketURL = safeSessionStorage.getItem('webSocketURL');
-    const storedWebSocketSchema = safeSessionStorage.getItem('webSocketSchema');
-    const storedIntermediateSteps = safeSessionStorage.getItem('enableIntermediateSteps');
-    const storedExpandSteps = safeSessionStorage.getItem('expandIntermediateSteps');
-    const storedStepOverride = safeSessionStorage.getItem('intermediateStepOverride');
+    const loadEnvironmentVariables = async () => {
+      const storedChatURL = safeSessionStorage.getItem('chatCompletionURL');
+      const storedWebSocketURL = safeSessionStorage.getItem('webSocketURL');
+      const storedWebSocketSchema = safeSessionStorage.getItem('webSocketSchema');
+      const storedIntermediateSteps = safeSessionStorage.getItem('enableIntermediateSteps');
+      const storedExpandSteps = safeSessionStorage.getItem('expandIntermediateSteps');
+      const storedStepOverride = safeSessionStorage.getItem('intermediateStepOverride');
+  
+      let envChatURL = DEFAULT_CHAT_COMPLETION_URL;
+      let envWebSocketURL = DEFAULT_WEBSOCKET_URL;
+  
+      try {
+        // Fetch environment variables from server-side API
+        console.log('🔧 Fetching environment variables from server...');
+        const response = await fetch('/api/env-vars');
+        
+        if (response.ok) {
+          const serverEnvVars: ServerEnvVars = await response.json();
+          console.log('✅ Server-side environment variables loaded:', serverEnvVars);
+          
+          // Use server-side environment variables if available
+          envChatURL = serverEnvVars.NEXT_PUBLIC_HTTP_CHAT_COMPLETION_URL || DEFAULT_CHAT_COMPLETION_URL;
+          envWebSocketURL = serverEnvVars.NEXT_PUBLIC_WS_CHAT_COMPLETION_URL || DEFAULT_WEBSOCKET_URL;
+          
+          // Store for use by other parts of the app
+          window.__SERVER_ENV = serverEnvVars;
+          
+        } else {
+          console.warn('⚠️ Failed to fetch server environment variables, using defaults');
+        }
+      } catch (error) {
+        console.error('❌ Error fetching server environment variables:', error);
+        console.log('🔄 Falling back to default constants');
+        
+        // Fallback to default constants (process.env is empty in production anyway)
+        envChatURL = DEFAULT_CHAT_COMPLETION_URL;
+        envWebSocketURL = DEFAULT_WEBSOCKET_URL;
+      }
+      // Add debug logging
+      console.log('🔍 =================================');
+      console.log('🔍 ENVIRONMENT VARIABLES DEBUG');
+      console.log('🔍 =================================');
 
-    // Use environment variables as defaults, with fallback to constants
-    const envChatURL = process.env.NEXT_PUBLIC_HTTP_CHAT_COMPLETION_URL || DEFAULT_CHAT_COMPLETION_URL;
-    const envWebSocketURL = process.env.NEXT_PUBLIC_WS_CHAT_COMPLETION_URL || DEFAULT_WEBSOCKET_URL;
+      // Show server-side environment variables (if available)
+      console.log('📋 Server-side Environment Variables (from API):');
+      if (window.__SERVER_ENV) {
+        console.log('  NEXT_PUBLIC_API_BASE_URL:', window.__SERVER_ENV.NEXT_PUBLIC_API_BASE_URL);
+        console.log('  NEXT_PUBLIC_API_HOST:', window.__SERVER_ENV.NEXT_PUBLIC_API_HOST);
+        console.log('  NEXT_PUBLIC_API_PORT:', window.__SERVER_ENV.NEXT_PUBLIC_API_PORT);
+        console.log('  NEXT_PUBLIC_API_PROTOCOL:', window.__SERVER_ENV.NEXT_PUBLIC_API_PROTOCOL);
+        console.log('  NEXT_PUBLIC_HTTP_CHAT_COMPLETION_URL:', window.__SERVER_ENV.NEXT_PUBLIC_HTTP_CHAT_COMPLETION_URL);
+        console.log('  NEXT_PUBLIC_WS_CHAT_COMPLETION_URL:', window.__SERVER_ENV.NEXT_PUBLIC_WS_CHAT_COMPLETION_URL);
+        console.log('  NEXT_PUBLIC_WEB_SOCKET_DEFAULT_ON:', window.__SERVER_ENV.NEXT_PUBLIC_WEB_SOCKET_DEFAULT_ON);
+        console.log('  NEXT_PUBLIC_CHAT_HISTORY_DEFAULT_ON:', window.__SERVER_ENV.NEXT_PUBLIC_CHAT_HISTORY_DEFAULT_ON);
+      } else {
+        console.log('  ❌ Server-side environment variables not available');
+      }
 
-    // Add debug logging
-    console.log('🔍 Environment Variables Debug:');
-    console.log('  NEXT_PUBLIC_HTTP_CHAT_COMPLETION_URL:', process.env.NEXT_PUBLIC_HTTP_CHAT_COMPLETION_URL);
-    console.log('  NEXT_PUBLIC_WS_CHAT_COMPLETION_URL:', process.env.NEXT_PUBLIC_WS_CHAT_COMPLETION_URL);
-    console.log('  envChatURL:', envChatURL);
-    console.log('  envWebSocketURL:', envWebSocketURL);
+      // Show client-side environment variables (for comparison)
+      console.log('📋 Client-side Environment Variables (build-time):');
+      console.log('  NEXT_PUBLIC_HTTP_CHAT_COMPLETION_URL:', process.env.NEXT_PUBLIC_HTTP_CHAT_COMPLETION_URL || '(empty)');
+      console.log('  NEXT_PUBLIC_WS_CHAT_COMPLETION_URL:', process.env.NEXT_PUBLIC_WS_CHAT_COMPLETION_URL || '(empty)');
 
-    console.log('🔍 SessionStorage Values:');
-    console.log('  storedChatURL:', storedChatURL);
-    console.log('  storedWebSocketURL:', storedWebSocketURL);
+      // Show Node environment
+      console.log('🌍 Node Environment:');
+      console.log('  NODE_ENV:', process.env.NODE_ENV);
+      console.log('  typeof window:', typeof window);
 
-    console.log('🔍 Final Values Used:');
-    console.log('  Final chatURL:', storedChatURL || envChatURL || '');
-    console.log('  Final webSocketURL:', storedWebSocketURL || envWebSocketURL || '');
-    
-    setChatCompletionEndPoint(storedChatURL || envChatURL || '');
-    setWebSocketEndPoint(storedWebSocketURL || envWebSocketURL || '');
+      // Show current URL context
+      console.log('🌐 Current Context:');
+      console.log('  window.location.hostname:', typeof window !== 'undefined' ? window.location.hostname : 'N/A');
+      console.log('  window.location.href:', typeof window !== 'undefined' ? window.location.href : 'N/A');
+
+      console.log('🔍 =================================');
+
+      console.log('🔍 SessionStorage Values:');
+      console.log('  storedChatURL:', storedChatURL);
+      console.log('  storedWebSocketURL:', storedWebSocketURL);
+
+      console.log('🔍 Final Values Used:');
+      console.log('  Final chatURL:', storedChatURL || envChatURL || '');
+      console.log('  Final webSocketURL:', storedWebSocketURL || envWebSocketURL || '');
+      
+      setChatCompletionEndPoint(storedChatURL || envChatURL || '');
+      setWebSocketEndPoint(storedWebSocketURL || envWebSocketURL || '');
     if (storedWebSocketSchema) setWebSocketSchema(storedWebSocketSchema);
     if (storedIntermediateSteps !== null) {
       setIsIntermediateStepsEnabled(storedIntermediateSteps === 'true');
@@ -123,8 +181,9 @@ export const SettingDialog: FC<Props> = ({ open, onClose }) => {
     if (storedStepOverride !== null) {
       setIntermediateStepOverrideToggle(storedStepOverride !== 'false');
     }
+  };
+  loadEnvironmentVariables();
   }, []);
-
   // Update CSP on component mount if backend URL is already set
   useEffect(() => {
     const storedChatURL = sessionStorage.getItem('chatCompletionURL');
@@ -141,18 +200,18 @@ export const SettingDialog: FC<Props> = ({ open, onClose }) => {
   // Load saved URLs from localStorage on component mount
   useEffect(() => {
     const loadSavedSettings = () => {
-      // Priority 1: Environment variables (take precedence)
-      const envChatURL = process.env.NEXT_PUBLIC_HTTP_CHAT_COMPLETION_URL;
-      const envWebSocketURL = process.env.NEXT_PUBLIC_WS_CHAT_COMPLETION_URL;
-      
-      // Priority 2: localStorage (fallback for manual overrides)
+      // Priority 1: localStorage (UI Settings - user's explicit choice)
       const savedChatURL = localStorage.getItem('chatCompletionURL');
       const savedWebSocketURL = localStorage.getItem('webSocketURL');
       const savedWebSocketSchema = localStorage.getItem('webSocketSchema');
       
-      // Use environment variables first, then localStorage
-      const finalChatURL = envChatURL || savedChatURL;
-      const finalWebSocketURL = envWebSocketURL || savedWebSocketURL;
+      // Priority 2: Environment variables (deployment configuration)
+      const envChatURL = process.env.NEXT_PUBLIC_HTTP_CHAT_COMPLETION_URL;
+      const envWebSocketURL = process.env.NEXT_PUBLIC_WS_CHAT_COMPLETION_URL;
+      
+      // Use UI settings first, then environment variables
+      const finalChatURL = savedChatURL || envChatURL;
+      const finalWebSocketURL = savedWebSocketURL || envWebSocketURL;
       
       if (finalChatURL && finalChatURL !== chatCompletionEndPoint) {
         setChatCompletionEndPoint(finalChatURL);
@@ -271,10 +330,53 @@ export const SettingDialog: FC<Props> = ({ open, onClose }) => {
   const getTargetBackendUrl = (): string => {
     console.log('getTargetBackendUrl called with chatCompletionEndPoint:', chatCompletionEndPoint);
     
-    // Always use the correct local backend URL to avoid confusion
-    const correctBackendUrl = 'http://127.0.0.1:8081';
-    console.log('Using correct backend URL:', correctBackendUrl);
-    return correctBackendUrl;
+    // Priority 1: UI Settings (user's explicit choice in the form field - HIGHEST PRIORITY)
+    if (chatCompletionEndPoint && chatCompletionEndPoint.trim()) {
+      try {
+        const url = new URL(chatCompletionEndPoint);
+        const uiBackendUrl = `${url.protocol}//${url.host}`;
+        console.log('✅ Using backend URL from UI form field (highest priority):', uiBackendUrl);
+        return uiBackendUrl;
+      } catch (error) {
+        console.warn('Invalid UI chatCompletionEndPoint format:', chatCompletionEndPoint);
+      }
+    }
+    
+    // Priority 2: Environment variables (deployment configuration)
+    if (process.env.NEXT_PUBLIC_BACKEND_URL) {
+      console.log('✅ Using NEXT_PUBLIC_BACKEND_URL from environment:', process.env.NEXT_PUBLIC_BACKEND_URL);
+      return process.env.NEXT_PUBLIC_BACKEND_URL;
+    }
+    
+    // Priority 3: Extract from environment chat completion URL
+    if (process.env.NEXT_PUBLIC_HTTP_CHAT_COMPLETION_URL) {
+      try {
+        const url = new URL(process.env.NEXT_PUBLIC_HTTP_CHAT_COMPLETION_URL);
+        const envBackendUrl = `${url.protocol}//${url.host}`;
+        console.log('✅ Using backend URL from NEXT_PUBLIC_HTTP_CHAT_COMPLETION_URL:', envBackendUrl);
+        return envBackendUrl;
+      } catch (error) {
+        console.warn('Invalid NEXT_PUBLIC_HTTP_CHAT_COMPLETION_URL:', process.env.NEXT_PUBLIC_HTTP_CHAT_COMPLETION_URL);
+      }
+    }
+    
+    // Priority 4: Server-side environment variables
+    if (typeof window !== 'undefined' && (window as any).__SERVER_ENV) {
+      const serverEnv = (window as any).__SERVER_ENV;
+      if (serverEnv.NEXT_PUBLIC_BACKEND_URL) {
+        console.log('✅ Using server-side NEXT_PUBLIC_BACKEND_URL:', serverEnv.NEXT_PUBLIC_BACKEND_URL);
+        return serverEnv.NEXT_PUBLIC_BACKEND_URL;
+      }
+      if (serverEnv.NEXT_PUBLIC_API_BASE_URL) {
+        console.log('✅ Using server-side NEXT_PUBLIC_API_BASE_URL as backend:', serverEnv.NEXT_PUBLIC_API_BASE_URL);
+        return serverEnv.NEXT_PUBLIC_API_BASE_URL;
+      }
+    }
+    
+    // Final fallback - use localhost for local development
+    const fallbackUrl = 'http://127.0.0.1:8081';
+    console.log('⚠️ Using fallback backend URL:', fallbackUrl);
+    return fallbackUrl;
   };
 
   // Handle MFA flow after JIRA validation
@@ -296,7 +398,7 @@ export const SettingDialog: FC<Props> = ({ open, onClose }) => {
           user_id: jiraUsernameValue,
           user_email: `${jiraUsernameValue}@nvidia.com`,
           force_new: forceNew
-        }),
+        })
       });
 
       if (response.ok) {
