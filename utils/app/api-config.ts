@@ -220,66 +220,96 @@ export function getBackendUrl(): string {
     return getApiBaseUrl();
   }
   
-  // Second priority: Environment variables (now takes precedence over localStorage)
-  const envBackendUrl = process.env.NEXT_PUBLIC_BACKEND_URL;
-  if (envBackendUrl) {
-    return envBackendUrl;
-  }
-  
-  // Third priority: Environment-based detection
-  const hostname = window.location.hostname;
-  // If running on production domain, use production backend
-  if (hostname.includes('tpm.prd.astra.nvidia.com') || hostname.includes('astra.nvidia.com')) {
-    return 'https://tpm-nat.prd.astra.nvidia.com';
-  }
-  
-  // Fourth priority: Current chat completion URL from environment variables
-  const envChatURL = process.env.NEXT_PUBLIC_HTTP_CHAT_COMPLETION_URL;
-  if (envChatURL) {
-    try {
-      const url = new URL(envChatURL);
-      return `${url.protocol}//${url.host}`;
-    } catch (error) {
-      console.warn('Invalid environment chat URL:', envChatURL);
-    }
-  }
-  
-  // Fifth priority: Explicit backend URL from localStorage/sessionStorage (set by UI settings)
-  const storedBackendUrl = localStorage.getItem('backendUrl') || sessionStorage.getItem('backendUrl');
-  if (storedBackendUrl) {
-    return storedBackendUrl;
-  }
-  
-  // Sixth priority: Previously discovered backend URL (check localStorage for persistence)
-  const storedDiscoveredUrl = localStorage.getItem('discoveredBackendUrl') || sessionStorage.getItem('discoveredBackendUrl');
-  if (storedDiscoveredUrl) {
-    return storedDiscoveredUrl;
-  }
-  
-  // Seventh priority: Current chat completion URL from localStorage/sessionStorage (UI settings)
+  // Second priority: Current chat completion URL from localStorage/sessionStorage (UI settings - HIGHEST PRIORITY)
   const storedChatURL = localStorage.getItem('chatCompletionURL') || sessionStorage.getItem('chatCompletionURL');
   if (storedChatURL) {
     try {
       const url = new URL(storedChatURL);
+      console.log('🎯 Using backend URL from UI localStorage (highest priority):', `${url.protocol}//${url.host}`);
       return `${url.protocol}//${url.host}`;
     } catch (error) {
       console.warn('Invalid stored chat URL:', storedChatURL);
     }
   }
   
+  // Third priority: Explicit backend URL from localStorage/sessionStorage (set by UI settings)
+  const storedBackendUrl = localStorage.getItem('backendUrl') || sessionStorage.getItem('backendUrl');
+  if (storedBackendUrl) {
+    console.log('🎯 Using explicit backend URL from localStorage:', storedBackendUrl);
+    return storedBackendUrl;
+  }
+  
+  // Fourth priority: Environment variables
+  const envBackendUrl = process.env.NEXT_PUBLIC_BACKEND_URL;
+  if (envBackendUrl) {
+    console.log('📦 Using backend URL from environment variable:', envBackendUrl);
+    return envBackendUrl;
+  }
+  
+  // Fifth priority: Environment-based detection
+  const hostname = window.location.hostname;
+  // If running on production domain, use production backend
+  if (hostname.includes('tpm.prd.astra.nvidia.com') || hostname.includes('astra.nvidia.com')) {
+    console.log('🌐 Detected production hostname, using production backend');
+    return 'https://tpm-nat.prd.astra.nvidia.com';
+  }
+  
+  // Sixth priority: Current chat completion URL from environment variables
+  const envChatURL = process.env.NEXT_PUBLIC_HTTP_CHAT_COMPLETION_URL;
+  if (envChatURL) {
+    try {
+      const url = new URL(envChatURL);
+      console.log('📦 Using backend URL from environment chat URL:', `${url.protocol}//${url.host}`);
+      return `${url.protocol}//${url.host}`;
+    } catch (error) {
+      console.warn('Invalid environment chat URL:', envChatURL);
+    }
+  }
+  
+  // Seventh priority: Previously discovered backend URL (check localStorage for persistence)
+  const storedDiscoveredUrl = localStorage.getItem('discoveredBackendUrl') || sessionStorage.getItem('discoveredBackendUrl');
+  if (storedDiscoveredUrl) {
+    console.log('🔍 Using previously discovered backend URL:', storedDiscoveredUrl);
+    return storedDiscoveredUrl;
+  }
+  
   // Final fallback: Use discovery mechanism
+  console.log('⚠️ No backend URL configured, using fallback discovery');
   return getApiBaseUrl();
 }
 
 /**
  * Get backend URL with automatic discovery
  * Use this for initial connections when you want auto-discovery
+ * ALWAYS checks localStorage first (UI settings priority)
  */
 export async function getBackendUrlWithDiscovery(): Promise<string> {
   if (typeof window === 'undefined') {
     return getApiBaseUrl();
   }
 
+  // FIRST: Check if user has explicitly set a backend URL in localStorage (UI settings)
+  const storedChatURL = localStorage.getItem('chatCompletionURL') || sessionStorage.getItem('chatCompletionURL');
+  if (storedChatURL) {
+    try {
+      const url = new URL(storedChatURL);
+      const backendUrl = `${url.protocol}//${url.host}`;
+      console.log('🎯 Using backend URL from localStorage (skipping discovery):', backendUrl);
+      return backendUrl;
+    } catch (error) {
+      console.warn('Invalid stored chat URL:', storedChatURL);
+    }
+  }
+
+  // SECOND: Check explicit backend URL
+  const storedBackendUrl = localStorage.getItem('backendUrl') || sessionStorage.getItem('backendUrl');
+  if (storedBackendUrl) {
+    console.log('🎯 Using explicit backend URL from localStorage (skipping discovery):', storedBackendUrl);
+    return storedBackendUrl;
+  }
+
+  // THIRD: Only run discovery if no localStorage URLs are set
+  console.log('⚠️ No localStorage URLs found, running backend discovery...');
   try {
     return await discoverBackendUrl();
   } catch (error) {
