@@ -865,6 +865,23 @@ export const SettingDialog: FC<Props> = ({ open, onClose }) => {
         console.warn(' Could not clear MFA session (this is expected if server is not running)');
       }
 
+      // Clear backend JIRA credentials from AIQ context
+      // This is CRITICAL to ensure disconnection works properly with AIQ context persistence
+      try {
+        await fetch('/api/mfa-jira-disconnect-proxy', {
+          method: 'POST',
+          headers: { 
+            'Content-Type': 'application/json',
+            'X-Backend-URL': currentBackendUrl,
+          }
+        });
+        clearedItems.push('Backend JIRA credentials');
+        console.log('✅ Backend JIRA credentials cleared from AIQ context');
+      } catch (error) {
+        console.warn('⚠️ Could not clear backend JIRA credentials:', error);
+        // Don't fail the whole operation if backend clear fails
+      }
+
       // Clear any stored MFA state
       resetMfaModalStates();
       clearedItems.push('MFA setup state');

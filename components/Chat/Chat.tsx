@@ -151,7 +151,7 @@ export const Chat = () => {
         if (now - storedTime <= 24 * 60 * 60 * 1000) {
           // Get the correct session key for the current key version
           const { getCurrentSessionKey } = await import('@/utils/app/crypto');
-          const sessionKey = getCurrentSessionKey();
+          const sessionKey = await getCurrentSessionKey();  // ✅ FIX: Await async function
           
           if (sessionKey) {
             // Send encrypted data to server for decryption
@@ -706,10 +706,11 @@ export const Chat = () => {
               // Check if credentials are expired before sending
               const storedTime = new Date(storedData.timestamp).getTime();
               const now = new Date().getTime();
-              if (now - storedTime <= 24 * 60 * 60 * 1000) {
+              const credentialExpiry = (mfaConfig.session_timeout || 604800) * 1000;  // Use MFA config timeout (default 7 days)
+              if (now - storedTime <= credentialExpiry) {
                 // Get the correct session key for the current key version
                 const { getCurrentSessionKey } = await import('@/utils/app/crypto');
-                const sessionKey = getCurrentSessionKey();
+                const sessionKey = await getCurrentSessionKey();  // ✅ FIX: Await async function
                 
                 if (sessionKey) {
                   console.log('🔍 Chat: JIRA credentials loaded for WebSocket request:', {
@@ -768,10 +769,11 @@ export const Chat = () => {
             // Check if credentials are expired before sending
             const storedTime = new Date(storedData.timestamp).getTime();
             const now = new Date().getTime();
-            if (now - storedTime <= 24 * 60 * 60 * 1000) {
+            const credentialExpiryHTTP = (mfaConfigHTTP.session_timeout || 604800) * 1000;  // Use MFA config timeout (default 7 days)
+            if (now - storedTime <= credentialExpiryHTTP) {
               // Get the correct session key for the current key version
               const { getCurrentSessionKey } = await import('@/utils/app/crypto');
-              const sessionKey = getCurrentSessionKey();
+              const sessionKey = await getCurrentSessionKey();  // ✅ FIX: Await async function
               
               if (sessionKey) {
                 console.log(`🔍 Chat HTTP: JIRA credentials loaded from ${storageTypeHTTP}`);

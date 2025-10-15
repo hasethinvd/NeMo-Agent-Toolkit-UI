@@ -69,6 +69,8 @@ interface StoredEncryptedData {
 // Generate a random password for the session if it doesn't exist
 const getSessionPassword = (keyVersion?: number): string => {
   const keyName = keyVersion ? `${S_KEY}-v${keyVersion}` : S_KEY;
+  // Session keys are always stored in localStorage regardless of credential storage
+  // This is intentional - session keys are encryption keys, not credentials
   let pass = localStorage.getItem(keyName);
   if (!pass) {
     pass = window.crypto.getRandomValues(new Uint8Array(32)).toString();
@@ -490,8 +492,9 @@ export const getKeyRotationStatus = (): { currentVersion: number, lastRotation?:
 };
 
 // Get the current session key for the active key version
-export const getCurrentSessionKey = (): string | null => {
-    const storedDataJSON = localStorage.getItem(C_KEY);
+export const getCurrentSessionKey = async (): Promise<string | null> => {
+    const storage = await getJiraStorage();  // ✅ FIX: Use configurable storage
+    const storedDataJSON = storage.getItem(C_KEY);
     if (!storedDataJSON) return null;
 
     try {

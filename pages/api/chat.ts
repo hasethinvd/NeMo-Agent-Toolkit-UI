@@ -137,6 +137,7 @@ const handler = async (req: Request): Promise<Response> => {
       headers: {
         'Content-Type': 'application/json',
         'Conversation-Id': req.headers.get('Conversation-Id') || '',
+        ...authHeader,  // ✅ FIX: Include Authorization header
       },
       body: JSON.stringify(finalPayload),
     });
