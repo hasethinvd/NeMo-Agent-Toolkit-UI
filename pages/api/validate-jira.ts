@@ -14,22 +14,24 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   try {
     // Check backend configuration to determine auth method (server-side compatible)
-    let useHeaderAuth = true; // Default to header auth
-    try {
-      // Server-side version: check environment variable first
-      if (process.env.NEXT_PUBLIC_JIRA_AUTH_METHOD) {
-        const envAuthMethod = process.env.NEXT_PUBLIC_JIRA_AUTH_METHOD.toLowerCase();
-        useHeaderAuth = envAuthMethod === 'header';
-        console.log(`🔐 Using auth method from environment: ${envAuthMethod}`);
-      } else {
-        // Default to header auth for server-side
-        useHeaderAuth = true;
-        console.log(`🔐 Using default server-side auth method: header`);
-      }
-    } catch (error) {
-      console.warn('🔐 Failed to determine auth method, defaulting to header auth:', error);
-      useHeaderAuth = true;
-    }
+    // TEMPORARY: Force body auth to match backend config
+    let useHeaderAuth = false; // Force body auth
+    console.log(`🔐 FORCED: Using body auth method to match backend`);
+    
+    // Original code (commented out for testing):
+    // try {
+    //   if (process.env.NEXT_PUBLIC_JIRA_AUTH_METHOD) {
+    //     const envAuthMethod = process.env.NEXT_PUBLIC_JIRA_AUTH_METHOD.toLowerCase();
+    //     useHeaderAuth = envAuthMethod === 'header';
+    //     console.log(`🔐 Using auth method from environment: ${envAuthMethod}`);
+    //   } else {
+    //     useHeaderAuth = true;
+    //     console.log(`🔐 Using default server-side auth method: header`);
+    //   }
+    // } catch (error) {
+    //   console.warn('🔐 Failed to determine auth method, defaulting to header auth:', error);
+    //   useHeaderAuth = true;
+    // }
     
     console.log(`🔐 JIRA validation using ${useHeaderAuth ? 'header' : 'body'} auth method`);
     

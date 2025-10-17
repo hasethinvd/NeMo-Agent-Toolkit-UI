@@ -184,8 +184,8 @@ export const ChatMessage: FC<Props> = memo(({ message, messageIndex, onEdit}) =>
       result += result ? `\n\n${content}` : content;
     }
   
-    // fixing malformed html and removing extra spaces to avoid markdown issues
-    return fixMalformedHtml(result)?.trim()?.replace(/\n\s+/, "\n ");
+    // fixing malformed html - preserve intentional blank lines for proper markdown formatting
+    return fixMalformedHtml(result)?.trim();
   };
 
   return (
