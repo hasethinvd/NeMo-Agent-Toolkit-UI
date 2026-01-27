@@ -793,17 +793,42 @@ export const Chat = () => {
           console.log(`🔍 Chat HTTP: No JIRA credentials found in ${storageTypeHTTP}`);
         }
 
-        // cleaning up messages to fit the request payload
+        const stringifyMessageContent = (message: any): string => {
+          if (!message) return '';
+          if (typeof message.content === 'string') return message.content.trim();
+
+          const text = (message.content?.text ?? '').toString().trim();
+          const attachments = message.content?.attachments ?? [];
+          if (!Array.isArray(attachments) || attachments.length === 0) return text;
+
+          let appended = text;
+          for (const att of attachments) {
+            const name = att?.name ? String(att.name) : 'attachment';
+            const type = (att?.type ?? 'text').toString();
+            const content = (att?.content ?? '').toString();
+            if (!content) continue;
+
+            if (type === 'text') {
+              appended += `\n\n[Attached file: ${name}]\n${content}`;
+            } else if (type === 'image') {
+              appended += `\n\n[Attached image: ${name}]`;
+            } else {
+              appended += `\n\n[Attached ${type}: ${name}]\n${content}`;
+            }
+          }
+          return appended.trim();
+        }
+
+        // cleaning up messages to fit the request payload (and preserve attachments via inline text)
         const messagesCleaned = updatedConversation.messages.map((message) => {
-          const content = typeof message.content === 'string' ? message.content.trim() : '';
           return {
             role: message.role,
-            content: content,
+            content: stringifyMessageContent(message),
           };
         })
         
         const chatBody: ChatBody = {
-          messages: chatHistory ? messagesCleaned : [{ role: 'user', content: message?.content }],
+          messages: chatHistory ? messagesCleaned : [{ role: 'user', content: stringifyMessageContent(message) }],
           chatCompletionURL: sessionStorage.getItem('chatCompletionURL') || chatCompletionURL,
           jiraCredentials: jiraCredentialsForBody,
           additionalProps: {
@@ -851,11 +876,11 @@ export const Chat = () => {
           
           if (isStreamable) {
             if (updatedConversation.messages.length === 1) {
-              const { content } = message;
+              const contentStr = stringifyMessageContent(message);
               const customName =
-                typeof content === 'string' && content.length > 30
-                  ? content.substring(0, 30) + '...'
-                  : content;
+                contentStr.length > 30
+                  ? contentStr.substring(0, 30) + '...'
+                  : contentStr;
               updatedConversation = {
                 ...updatedConversation,
                 name: customName,
@@ -895,7 +920,8 @@ export const Chat = () => {
 
               // Process complete intermediate steps
               let rawIntermediateSteps = [];
-              let messages = chunkValue.match(/<intermediatestep>(.*?)<\/intermediatestep>/gs) || [];
+              // Avoid RegExp dotAll flag (s) to support older TS targets
+              let messages = chunkValue.match(/<intermediatestep>([\s\S]*?)<\/intermediatestep>/g) || [];
               for (const message of messages) {
                 try {
                   const jsonString = message.replace('<intermediatestep>', '').replace('</intermediatestep>', '').trim();
@@ -921,7 +947,7 @@ export const Chat = () => {
                 isFirst = false;
               
                 // loop through rawIntermediateSteps and add them to the processedIntermediateSteps
-                let processedIntermediateSteps = []
+                let processedIntermediateSteps: any[] = []
                 rawIntermediateSteps.forEach((step) => {
                   processedIntermediateSteps = processIntermediateMessage(processedIntermediateSteps, step, sessionStorage.getItem('intermediateStepOverride') === 'false' ? false : intermediateStepOverride )
                 })
@@ -1049,7 +1075,7 @@ export const Chat = () => {
           saveConversation(updatedConversation);
           homeDispatch({ field: 'loading', value: false });
           homeDispatch({ field: 'messageIsStreaming', value: false });
-          if (error === 'aborted' || error?.name === 'AbortError') {
+          if (error === 'aborted' || (error as any)?.name === 'AbortError') {
             return;
           } else {
             console.log('error during chat completion - ', error);
@@ -1248,7 +1274,7 @@ export const Chat = () => {
               handleSend(currentMessage, 0);
             } else {
               const lastUserMessage = fetchLastMessage(
-                {messages: selectedConversation?.messages, role: 'user'}
+                {messages: (selectedConversation?.messages as any) || [], role: 'user'}
               );
               lastUserMessage && handleSend(lastUserMessage, 1);
             }

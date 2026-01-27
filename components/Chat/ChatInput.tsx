@@ -38,7 +38,8 @@ interface Props {
   onScrollDownClick: () => void;
   textareaRef: MutableRefObject<HTMLTextAreaElement | null>;
   showScrollDownButton: boolean;
-  controller: Ref<AbortController>
+  // `Chat.tsx` passes a RefObject, but keep this flexible to support other deployments.
+  controller: any
 }
 
 export const ChatInput = ({
@@ -63,16 +64,23 @@ export const ChatInput = ({
 
   const [content, setContent] = useState<string>('');
   const [isTyping, setIsTyping] = useState<boolean>(false);
-  const fileInputRef = useRef(null);
-  const [inputFile, setInputFile] = useState(null)
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const [inputFile, setInputFile] = useState<string | null>(null)
   const [inputFileExtension, setInputFileExtension] = useState('')
   const [inputFileContent, setInputFileContent] = useState('')
   const [inputFileContentCompressed, setInputFileContentCompressed] = useState('')
   const [isRecording, setIsRecording] = useState(false);
-  const recognitionRef = useRef(null);
+  const recognitionRef = useRef<any>(null);
+
+  // Some forks have a prompt/template feature; keep safe defaults so typecheck doesn't fail if not wired.
+  const filteredPrompts: any[] = [];
+  const activePromptIndex: number = 0;
+  const handlePromptSelect = (_p: any) => {};
+  const setShowPromptList = (_v: boolean) => {};
+  const variables: string[] = [];
 
   const triggerFileUpload = () => {
-    fileInputRef?.current.click();
+    fileInputRef?.current?.click();
   };
 
   const handleInputFileDelete = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -82,17 +90,28 @@ export const ChatInput = ({
     setInputFileContentCompressed('');
   };
 
-  const handleFileChange = (e: { target: { files: any[]; value: null; }; }) => {
-    const file = e.target.files[0]
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
     if (file) {
       // Reset the input value so the same file can be selected again if needed
-      e.target.value = null
+      e.target.value = ''
       const reader = new FileReader()
+      const [fileType] = file?.type ? file.type.split('/') : [''];
       reader.onload = (loadEvent) => {
-        const fullBase64String = loadEvent.target?.result;
-        processFile({ fullBase64String, file })
+        const result = loadEvent.target?.result;
+        if (fileType === 'image') {
+          const fullBase64String = String(result || '');
+          processImageFile({ fullBase64String, file })
+        } else {
+          const textContent = String(result || '');
+          processTextFile({ textContent, file })
+        }
       };
-      reader.readAsDataURL(file)
+      if (fileType === 'image') {
+        reader.readAsDataURL(file)
+      } else {
+        reader.readAsText(file)
+      }
     }
   };
 
@@ -109,7 +128,7 @@ export const ChatInput = ({
 
     // stop recognition if it's running
     if (isRecording) {
-      recognitionRef.current.stop();
+      recognitionRef.current?.stop?.();
       setIsRecording(false);
     }
 
@@ -119,13 +138,22 @@ export const ChatInput = ({
     }
 
     if (inputFile || inputFileContent) {
+      const attachmentType = inputFileExtension
+        ? ['png', 'jpg', 'jpeg', 'gif', 'webp'].includes(inputFileExtension.toLowerCase())
+          ? 'image'
+          : 'text'
+        : 'text';
+
       onSend({
         role: 'user',
-        content: content,
-        attachments: [{
-          content: inputFileContent,
-          type: 'image'
-        }]
+        content: {
+          text: content,
+          attachments: [{
+            content: inputFileContent,
+            type: attachmentType,
+            name: inputFile || undefined,
+          }]
+        }
       })
       setContent('');
       setInputFile(null)
@@ -168,9 +196,10 @@ export const ChatInput = ({
     }
     else {
       try {
-        controller?.current?.abort('aborted');
+        const ctrl = controller as any;
+        ctrl?.current?.abort?.('aborted');
         setTimeout(() => {
-          controller.current = new AbortController(); // Reset the controller
+          if (ctrl) ctrl.current = new AbortController(); // Reset the controller
         }, 100);
       } catch (error) {
         console.log('error aborting - ', error);
@@ -187,7 +216,7 @@ export const ChatInput = ({
   };
 
 
-  const processFile = ({ fullBase64String, file }: { fullBase64String: string, file: File }) => {
+  const processImageFile = ({ fullBase64String, file }: { fullBase64String: string, file: File }) => {
     const [fileType] = file && file.type.split('/');
     if (!["image"].includes(fileType)) {
       alert(`Only supported file types are : ${["image"].join(', ')}`);
@@ -195,7 +224,7 @@ export const ChatInput = ({
     }
 
     if (file && file.size > 2 * 1024 * 1024) {
-      alert(`File size should not exceed : 2 MB`);
+      alert(`Image file size should not exceed : 2 MB`);
       return;
     }
 
@@ -220,6 +249,23 @@ export const ChatInput = ({
       const extension = file.name.split('.').pop() ?? 'jpg';
       setInputFileExtension(extension.toLowerCase());
     }
+  }
+
+  const processTextFile = ({ textContent, file }: { textContent: string, file: File }) => {
+    if (file && file.size > 10 * 1024 * 1024) {
+      alert(`Text file size should not exceed : 10 MB`);
+      return;
+    }
+    setInputFileContent(textContent);
+    setInputFileContentCompressed('');
+    setInputFile(file.name);
+    const extension = file.name.split('.').pop() ?? 'txt';
+    setInputFileExtension(extension.toLowerCase());
+  }
+
+  // Backwards-compatible alias for older drag/drop and paste handlers
+  const processFile = ({ fullBase64String, file }: { fullBase64String: any, file: File }) => {
+    processImageFile({ fullBase64String: String(fullBase64String || ''), file });
   }
 
 
@@ -283,13 +329,15 @@ export const ChatInput = ({
     }
   };
 
-  const handlePaste = (event: { clipboardData: any; originalEvent: { clipboardData: any; }; }) => {
-    const clipboardData = event.clipboardData || event.originalEvent.clipboardData;
+  const handlePaste = (event: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    const clipboardData = event.clipboardData;
     let items = clipboardData.items;
     let isImagePasted = false;
 
     if (items) {
-      for (const item of items) {
+      // Avoid iterating DataTransferItemList with for..of (TS downlevelIteration)
+      for (let idx = 0; idx < items.length; idx++) {
+        const item = items[idx];
         if (item.type.indexOf("image") === 0) {
           isImagePasted = true;
           const file = item.getAsFile();
@@ -297,9 +345,9 @@ export const ChatInput = ({
           const reader = new FileReader();
           reader.onload = (loadEvent) => {
             const fullBase64String = loadEvent.target?.result;
-            processFile({ fullBase64String, file })
+            if (file) processFile({ fullBase64String, file })
           };
-          reader.readAsDataURL(file);
+          if (file) reader.readAsDataURL(file);
           break; // Stop checking after finding image, preventing any text setting
         }
       }
@@ -328,7 +376,7 @@ export const ChatInput = ({
     
     if (!recognitionRef.current) {
       const SpeechRecognition =
-        window?.SpeechRecognition || window?.webkitSpeechRecognition;
+        (window as any)?.SpeechRecognition || (window as any)?.webkitSpeechRecognition;
 
       if (!SpeechRecognition) return;
 
@@ -337,7 +385,7 @@ export const ChatInput = ({
       recognitionRef.current.interimResults = true;
       recognitionRef.current.continuous = true;
 
-      recognitionRef.current.onresult = (event) => {
+      recognitionRef.current.onresult = (event: any) => {
         let currentTranscript = '';
         for (let i = 0; i < event.results.length; i++) {
           currentTranscript += event.results[i][0].transcript;
