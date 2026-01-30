@@ -23,7 +23,9 @@ class SessionSecurityManager {
   private securityEvents: SecurityEvent[] = [];
   private sessionInfo: SessionInfo;
   private readonly MAX_EVENTS = 100;
-  private readonly SESSION_TIMEOUT = 8 * 60 * 60 * 1000; // 8 hours
+  // SESSION_TIMEOUT should match the MFA config (default 7 days = 604800 seconds)
+  // This was previously 8 hours which caused daily re-authentication
+  private readonly SESSION_TIMEOUT = 7 * 24 * 60 * 60 * 1000; // 7 days (matches MFA config default)
   private readonly CREDENTIAL_ACCESS_LIMIT = 50; // Max credential accesses per session
 
   constructor() {
@@ -156,22 +158,49 @@ class SessionSecurityManager {
   invalidateSession() {
     this.logSecurityEvent('session_invalidated', {}, 'high');
     
-    // Clear all sensitive data (only in browser)
-    if (typeof sessionStorage !== 'undefined' && typeof localStorage !== 'undefined') {
+    // Only clear security-specific session data, NOT MFA sessions or JIRA credentials
+    // Those have their own expiration managed by the MFA config (7 days default)
+    // 
+    // IMPORTANT: Previously this cleared ALL localStorage/sessionStorage which caused
+    // users to have to re-authenticate MFA daily even though MFA was set to 7 days
+    if (typeof sessionStorage !== 'undefined') {
       try {
-        sessionStorage.clear();
-        localStorage.clear();
+        // Only clear session-specific keys, preserve MFA and JIRA credentials
+        const keysToPreserve = [
+          'mfa_session_id',
+          'mfa_session_user', 
+          'mfa_last_activity',
+          'jira-credentials',
+          'chat-session-key',
+          'key-rotation-schedule'
+        ];
+        
+        // Clear sessionStorage (temporary session data)
+        const sessionKeys = Object.keys(sessionStorage);
+        sessionKeys.forEach(key => {
+          if (!keysToPreserve.includes(key)) {
+            sessionStorage.removeItem(key);
+          }
+        });
+        
+        // Don't clear localStorage - MFA sessions and JIRA creds are stored there
+        // and should persist according to their own timeout (7 days)
+        
+        console.log('🔐 Session invalidated (preserved MFA and JIRA credentials)');
       } catch (error) {
         console.error('Failed to clear storage:', error);
       }
     }
 
-    // Reload page to reset state (only in browser)
-    if (typeof window !== 'undefined') {
-      setTimeout(() => {
-        window.location.reload();
-      }, 1000);
-    }
+    // Reset session info but don't reload page (too disruptive)
+    this.sessionInfo = {
+      id: this.generateSessionId(),
+      created: Date.now(),
+      lastActivity: Date.now(),
+      userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : 'Server',
+      credentialAccess: 0
+    };
+    this.sessionId = this.sessionInfo.id;
   }
 
   getSecurityReport() {
