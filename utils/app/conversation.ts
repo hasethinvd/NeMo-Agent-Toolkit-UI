@@ -24,7 +24,7 @@ export const updateConversation = (
 
 export const saveConversation = (conversation: Conversation) => {
   try {
-    sessionStorage.setItem('selectedConversation', JSON.stringify(conversation));
+    localStorage.setItem('selectedConversation', JSON.stringify(conversation));
   } catch (error) {
     // Silently handle storage errors without showing popups
     console.log('Storage error, cannot save conversation:', error);
@@ -33,7 +33,7 @@ export const saveConversation = (conversation: Conversation) => {
 
 export const saveConversations = (conversations: Conversation[]) => {
   try {
-    sessionStorage.setItem('conversationHistory', JSON.stringify(conversations));
+    localStorage.setItem('conversationHistory', JSON.stringify(conversations));
   } catch (error) {
     // Silently handle storage errors without showing popups
     console.log('Storage error, cannot save conversations:', error);

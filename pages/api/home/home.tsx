@@ -35,22 +35,22 @@ import { HomeInitialState, initialState } from './home.state';
 import { v4 as uuidv4 } from 'uuid';
 import { getWorkflowName } from '@/utils/app/helper';
 
-// Helper function to safely access sessionStorage
-const safeSessionStorage = {
+// Helper function to safely access localStorage
+const safeLocalStorage = {
   getItem: (key: string): string | null => {
-    if (typeof window !== 'undefined' && window.sessionStorage) {
-      return sessionStorage.getItem(key);
+    if (typeof window !== 'undefined' && window.localStorage) {
+      return localStorage.getItem(key);
     }
     return null;
   },
   setItem: (key: string, value: string): void => {
-    if (typeof window !== 'undefined' && window.sessionStorage) {
-      sessionStorage.setItem(key, value);
+    if (typeof window !== 'undefined' && window.localStorage) {
+      localStorage.setItem(key, value);
     }
   },
   removeItem: (key: string): void => {
-    if (typeof window !== 'undefined' && window.sessionStorage) {
-      sessionStorage.removeItem(key);
+    if (typeof window !== 'undefined' && window.localStorage) {
+      localStorage.removeItem(key);
     }
   }
 };
@@ -196,33 +196,33 @@ const Home = (props: any) => {
       });
     }
 
-    const showChatbar = safeSessionStorage.getItem('showChatbar');
+    const showChatbar = safeLocalStorage.getItem('showChatbar');
     if (showChatbar) {
       dispatch({ field: 'showChatbar', value: showChatbar === 'true' });
     }
 
-    // Load URL settings from localStorage first (persists across tabs), then sessionStorage
-    const storedChatURL = (typeof window !== 'undefined' && localStorage.getItem('chatCompletionURL')) || safeSessionStorage.getItem('chatCompletionURL');
+    // Load URL settings from localStorage (persists across tabs)
+    const storedChatURL = safeLocalStorage.getItem('chatCompletionURL');
     if (storedChatURL) {
       dispatch({ field: 'chatCompletionURL', value: storedChatURL });
     }
 
-    const storedWebSocketURL = (typeof window !== 'undefined' && localStorage.getItem('webSocketURL')) || safeSessionStorage.getItem('webSocketURL');
+    const storedWebSocketURL = safeLocalStorage.getItem('webSocketURL');
     if (storedWebSocketURL) {
       dispatch({ field: 'webSocketURL', value: storedWebSocketURL });
     }
 
-    const storedWebSocketSchema = (typeof window !== 'undefined' && localStorage.getItem('webSocketSchema')) || safeSessionStorage.getItem('webSocketSchema');
+    const storedWebSocketSchema = safeLocalStorage.getItem('webSocketSchema');
     if (storedWebSocketSchema) {
       dispatch({ field: 'webSocketSchema', value: storedWebSocketSchema });
     }
 
-    const folders = safeSessionStorage.getItem('folders');
+    const folders = safeLocalStorage.getItem('folders');
     if (folders) {
       dispatch({ field: 'folders', value: JSON.parse(folders) });
     }
 
-    const conversationHistory = safeSessionStorage.getItem('conversationHistory');
+    const conversationHistory = safeLocalStorage.getItem('conversationHistory');
     if (conversationHistory) {
       const parsedConversationHistory: Conversation[] =
         JSON.parse(conversationHistory);
@@ -233,7 +233,7 @@ const Home = (props: any) => {
       dispatch({ field: 'conversations', value: cleanedConversationHistory });
     }
 
-    const selectedConversation = safeSessionStorage.getItem('selectedConversation');
+    const selectedConversation = safeLocalStorage.getItem('selectedConversation');
     if (selectedConversation) {
       const parsedSelectedConversation: Conversation =
         JSON.parse(selectedConversation);

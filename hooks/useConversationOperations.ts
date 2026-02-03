@@ -9,7 +9,7 @@ export const useConversationOperations = ({ conversations, dispatch, t, appConfi
     });
 
     // updating the session id based on the selcted conversation
-    sessionStorage.setItem('sessionId', conversation?.id);
+    localStorage.setItem('sessionId', conversation?.id);
     saveConversation(conversation);
   };
 
@@ -24,7 +24,7 @@ export const useConversationOperations = ({ conversations, dispatch, t, appConfi
     };
 
     // setting new the session id for new chat conversation
-    sessionStorage.setItem('sessionId', newConversation.id);
+    localStorage.setItem('sessionId', newConversation.id);
     const updatedConversations = [...conversations, newConversation];
 
     dispatch({ field: 'selectedConversation', value: newConversation });

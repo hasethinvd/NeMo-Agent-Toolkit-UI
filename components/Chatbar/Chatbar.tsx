@@ -73,8 +73,8 @@ export const Chatbar = () => {
 
     homeDispatch({ field: 'conversations', value: [] });
 
-    sessionStorage.removeItem('conversationHistory');
-    sessionStorage.removeItem('selectedConversation');
+    localStorage.removeItem('conversationHistory');
+    localStorage.removeItem('selectedConversation');
 
     const updatedFolders = folders.filter((f) => f.type !== 'chat');
 
@@ -109,13 +109,13 @@ export const Chatbar = () => {
           },
         });
 
-        sessionStorage.removeItem('selectedConversation');
+        localStorage.removeItem('selectedConversation');
     }
   };
 
   const handleToggleChatbar = () => {
     homeDispatch({ field: 'showChatbar', value: !showChatbar });
-    sessionStorage.setItem('showChatbar', JSON.stringify(!showChatbar));
+    localStorage.setItem('showChatbar', JSON.stringify(!showChatbar));
   };
 
   const handleDrop = (e: any) => {
