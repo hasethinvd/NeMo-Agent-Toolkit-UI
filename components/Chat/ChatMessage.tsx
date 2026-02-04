@@ -46,7 +46,13 @@ export const ChatMessage: FC<Props> = memo(({ message, messageIndex, onEdit}) =>
 
   const [isEditing, setIsEditing] = useState<boolean>(false);
   const [isTyping, setIsTyping] = useState<boolean>(false);
-  const [messageContent, setMessageContent] = useState(message.content);
+  // Safely extract string content from message.content (can be string or MessageContent object)
+  const getStringContent = (content: any): string => {
+    if (typeof content === 'string') return content;
+    if (content && typeof content === 'object' && 'text' in content) return content.text || '';
+    return '';
+  };
+  const [messageContent, setMessageContent] = useState(getStringContent(message.content));
   const [messagedCopied, setMessageCopied] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -65,7 +71,7 @@ export const ChatMessage: FC<Props> = memo(({ message, messageIndex, onEdit}) =>
   };
 
   const handleEditMessage = () => {
-    if (message.content != messageContent) {
+    if (getStringContent(message.content) !== messageContent) {
       if (selectedConversation && onEdit) {
         onEdit({ ...message, content: messageContent });
       }
@@ -112,7 +118,7 @@ export const ChatMessage: FC<Props> = memo(({ message, messageIndex, onEdit}) =>
   const copyOnClick = () => {
     if (!navigator.clipboard) return;
 
-    navigator.clipboard.writeText(message.content).then(() => {
+    navigator.clipboard.writeText(getStringContent(message.content)).then(() => {
       setMessageCopied(true);
       setTimeout(() => {
         setMessageCopied(false);
@@ -121,7 +127,7 @@ export const ChatMessage: FC<Props> = memo(({ message, messageIndex, onEdit}) =>
   };
 
   useEffect(() => {
-    setMessageContent(message.content);
+    setMessageContent(getStringContent(message.content));
   }, [message.content]);
 
 
@@ -144,7 +150,7 @@ export const ChatMessage: FC<Props> = memo(({ message, messageIndex, onEdit}) =>
         window.speechSynthesis.cancel();
         setIsPlaying(false);
       } else {
-        const textWithoutLinks = removeLinks(message?.content);
+        const textWithoutLinks = removeLinks(getStringContent(message?.content));
         const utterance = new SpeechSynthesisUtterance(textWithoutLinks);
         utterance.onend = () => setIsPlaying(false);
         utterance.onerror = () => setIsPlaying(false);
@@ -172,8 +178,11 @@ export const ChatMessage: FC<Props> = memo(({ message, messageIndex, onEdit}) =>
     role = 'assistant' 
   } = {}) => {
     const { content = '', intermediateSteps = [] } = message;
+    
+    // Safely get string content (content can be string or MessageContent object)
+    const stringContent = typeof content === 'string' ? content : (content?.text || '');
   
-    if (role === 'user') return content.trim();
+    if (role === 'user') return stringContent.trim();
   
     let result = '';
     if (intermediateStepsContent) {
@@ -181,7 +190,7 @@ export const ChatMessage: FC<Props> = memo(({ message, messageIndex, onEdit}) =>
     }
     
     if (responseContent) {
-      result += result ? `\n\n${content}` : content;
+      result += result ? `\n\n${stringContent}` : stringContent;
     }
   
     // fixing malformed html - preserve intentional blank lines for proper markdown formatting
@@ -240,7 +249,7 @@ export const ChatMessage: FC<Props> = memo(({ message, messageIndex, onEdit}) =>
                     <button
                       className="h-[40px] rounded-md border border-neutral-300 px-4 py-1 text-sm font-medium text-neutral-700 hover:bg-neutral-100 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-800"
                       onClick={() => {
-                        setMessageContent(message.content);
+                        setMessageContent(getStringContent(message.content));
                         setIsEditing(false);
                       }}
                     >
