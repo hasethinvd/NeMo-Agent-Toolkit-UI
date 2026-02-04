@@ -28,15 +28,14 @@ export interface Props {
   onEdit?: (editedMessage: Message) => void;
 }
 
+// Safely extract string content from message.content (can be string or MessageContent object)
+const getStringContent = (content: any): string => {
+  if (typeof content === 'string') return content;
+  if (content && typeof content === 'object' && 'text' in content) return content.text || '';
+  return '';
+};
+
 export const ChatMessage: FC<Props> = memo(({ message, messageIndex, onEdit}) => {
-
-  // return if the there is nothing to show
-  // no message and no intermediate steps
-  if (message?.content === ''
-      && message?.intermediateSteps?.length === 0) {
-    return
-  }
-
   const { t } = useTranslation('chat');
 
   const {
@@ -46,17 +45,17 @@ export const ChatMessage: FC<Props> = memo(({ message, messageIndex, onEdit}) =>
 
   const [isEditing, setIsEditing] = useState<boolean>(false);
   const [isTyping, setIsTyping] = useState<boolean>(false);
-  // Safely extract string content from message.content (can be string or MessageContent object)
-  const getStringContent = (content: any): string => {
-    if (typeof content === 'string') return content;
-    if (content && typeof content === 'object' && 'text' in content) return content.text || '';
-    return '';
-  };
   const [messageContent, setMessageContent] = useState(getStringContent(message.content));
   const [messagedCopied, setMessageCopied] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const speechSynthesisRef = useRef<SpeechSynthesisUtterance | null>(null);
+
+  // return if there is nothing to show - no message and no intermediate steps
+  // Note: Must be after all hooks to comply with React's rules of hooks
+  if (getStringContent(message?.content) === '' && message?.intermediateSteps?.length === 0) {
+    return null;
+  }
 
   const toggleEditing = () => {
     setIsEditing(!isEditing);
