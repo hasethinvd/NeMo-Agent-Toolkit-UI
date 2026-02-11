@@ -56,7 +56,7 @@ export const ChatHeader = ({ webSocketModeRef = {} }) => {
             {
                 selectedConversation?.messages?.length > 0 ? 
                 <div className={`absolute top-6 left-1/2 transform -translate-x-1/2 -translate-y-1/2`}>
-                    <span className="text-lg font-semibold text-white">NAT Toolkit</span>
+                    <span className="text-lg font-semibold text-white">TPM AI Assistant</span>
                 </div> 
                 :
                 <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 mx-auto flex flex-col space-y-5 md:space-y-10 px-3 pt-5 md:pt-12 sm:max-w-[600px] text-center">

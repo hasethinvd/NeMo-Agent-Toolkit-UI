@@ -62,7 +62,7 @@ const Home = (props: any) => {
     initialState,
   });
 
-  let workflow =  'NAT Toolkit';
+  let workflow =  'TPM AI Assistant';
 
   const {
     state: {
