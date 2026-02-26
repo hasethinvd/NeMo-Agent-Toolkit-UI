@@ -9,10 +9,8 @@ const nextConfig = {
     // !! WARN !!
     ignoreBuildErrors: true,
   },
-  experimental: {
-    serverActions: {
-      bodySizeLimit: "5mb",
-    },
+  serverActions: {
+    bodySizeLimit: "5mb",
   },
   webpack(config, { isServer, dev }) {
     config.experiments = {
