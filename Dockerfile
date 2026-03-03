@@ -37,7 +37,11 @@ FROM base AS runner
 WORKDIR /app
 
 # Apply latest security patches
-RUN apk upgrade --no-cache && npm install -g npm@latest && npm explore npm -g -- npm install minimatch@">=10.2.3"
+RUN apk upgrade --no-cache && npm install -g npm@latest \
+    && cd /usr/local/lib/node_modules/npm/node_modules/minimatch \
+    && npm install minimatch@">=10.2.3" --prefix /tmp/minimatch-fix \
+    && cp -rf /tmp/minimatch-fix/node_modules/minimatch/* . \
+    && rm -rf /tmp/minimatch-fix
 
 # Default server configuration
 ENV PORT=3000
